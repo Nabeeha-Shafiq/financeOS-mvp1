@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import imageCompression from 'browser-image-compression';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -21,4 +22,26 @@ export function formatBytes(bytes: number, decimals = 2) {
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+export async function compressImage(file: File): Promise<File> {
+  if (!file.type.startsWith('image/')) {
+    return file; // Don't compress non-image files like PDFs
+  }
+
+  const options = {
+    maxSizeMB: 1.5,
+    maxWidthOrHeight: 1920,
+    useWebWorker: true,
+    initialQuality: 0.8,
+  };
+
+  try {
+    const compressedFile = await imageCompression(file, options);
+    console.log(`Original size: ${formatBytes(file.size)}, Compressed size: ${formatBytes(compressedFile.size)}`);
+    return compressedFile;
+  } catch (error) {
+    console.error('Image compression failed:', error);
+    return file; // Fallback to original file
+  }
 }

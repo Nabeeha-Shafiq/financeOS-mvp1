@@ -8,6 +8,12 @@ import { X, FileText, Loader2, CheckCircle2, XCircle, AlertTriangle, Check, Penc
 import type { FileWrapper, ExtractReceiptDataOutput } from '@/types';
 import { formatBytes } from '@/lib/utils';
 import { VerificationDialog } from './verification-dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface FilePreviewCardProps {
   fileWrapper: FileWrapper;
@@ -37,7 +43,7 @@ export function FilePreviewCard({ fileWrapper, onRemove, onAccept }: FilePreview
   const [isVerifying, setIsVerifying] = useState(false);
 
   return (
-    <>
+    <TooltipProvider>
       <Card className="flex flex-col overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
         <CardHeader className="p-0 relative">
           <div className="aspect-video w-full overflow-hidden bg-muted flex items-center justify-center">
@@ -57,7 +63,7 @@ export function FilePreviewCard({ fileWrapper, onRemove, onAccept }: FilePreview
           <Button
             variant="ghost"
             size="icon"
-            className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/50 hover:bg-black/75 text-white"
+            className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/50 hover:bg-black/75 text-white"
             onClick={() => onRemove(id)}
             aria-label={`Remove ${file.name}`}
           >
@@ -86,18 +92,32 @@ export function FilePreviewCard({ fileWrapper, onRemove, onAccept }: FilePreview
           )}
 
           {status === 'error' && (
-            <div className="mt-2 text-xs text-destructive flex items-start gap-1.5">
-              <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0"/>
-              <p className="break-words">{errorMessage || 'An unknown error occurred.'}</p>
-            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="mt-2 text-xs text-destructive flex items-start gap-1.5 cursor-help">
+                  <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0"/>
+                  <p className="truncate">AI processing failed.</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="max-w-xs break-words">{errorMessage}</p>
+              </TooltipContent>
+            </Tooltip>
           )}
         </CardContent>
         <CardFooter className="p-4 border-t bg-muted/50">
           <StatusIndicator status={status} />
           {extractedData && (
-             <span className="text-xs ml-auto text-muted-foreground">
-                Conf: {(extractedData.confidence_score * 100).toFixed(0)}%
-              </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-xs ml-auto text-muted-foreground cursor-help">
+                  Conf: {(extractedData.confidence_score * 100).toFixed(0)}%
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>AI confidence score in the extracted data.</p>
+              </TooltipContent>
+            </Tooltip>
           )}
         </CardFooter>
       </Card>
@@ -110,6 +130,6 @@ export function FilePreviewCard({ fileWrapper, onRemove, onAccept }: FilePreview
           onSave={onAccept}
         />
       )}
-    </>
+    </TooltipProvider>
   );
 }

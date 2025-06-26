@@ -6,13 +6,13 @@ import { FilePreviewGrid } from '@/components/file-preview-grid';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { extractReceiptData } from '@/ai/flows/extract-receipt-data';
-import { readFileAsDataURL } from '@/lib/utils';
+import { readFileAsDataURL, compressImage } from '@/lib/utils';
 import type { FileWrapper, ExtractReceiptDataOutput } from '@/types';
 import { Bot, Sparkles } from 'lucide-react';
 import { SessionSummary } from '@/components/session-summary';
 
 const MAX_FILES = 50;
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB, will be compressed
 const ACCEPTED_FILE_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
 
 const withRetry = async <T,>(
@@ -63,7 +63,7 @@ export default function Home() {
         toast({
           variant: 'destructive',
           title: 'File too large',
-          description: `File "${file.name}" exceeds the 5MB limit.`,
+          description: `File "${file.name}" exceeds the 10MB limit.`,
         });
         return acc;
       }
@@ -95,14 +95,14 @@ export default function Home() {
     setFiles(prevFiles => prevFiles.map(f => f.id === id ? { ...f, status: 'accepted', extractedData: data } : f));
     toast({
         title: "Receipt Accepted",
-        description: `${data.merchant_name} has been added.`
+        description: `${data.merchant_name} has been successfully added to your session.`
     })
   }, [toast]);
 
   const handleProcessReceipts = async () => {
     const filesToProcess = files.filter(f => f.status === 'queued');
     if (filesToProcess.length === 0) {
-        toast({ title: "No new receipts to process."});
+        toast({ title: "No new receipts to process.", description: "Please upload some receipts first."});
         return;
     };
 
@@ -111,13 +111,14 @@ export default function Home() {
 
     const promises = filesToProcess.map(async (fileWrapper) => {
       try {
-        const receiptDataUri = await readFileAsDataURL(fileWrapper.file);
+        const compressedFile = await compressImage(fileWrapper.file);
+        const receiptDataUri = await readFileAsDataURL(compressedFile);
         const result = await withRetry(() => extractReceiptData({ receiptDataUri }));
         return { ...fileWrapper, id: fileWrapper.id, status: 'success' as const, extractedData: result };
       } catch (error) {
         console.error('Error processing receipt:', error);
         const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-        return { ...fileWrapper, id: fileWrapper.id, status: 'error' as const, errorMessage };
+        return { ...fileWrapper, id: fileWrapper.id, status: 'error' as const, errorMessage: `AI processing failed. ${errorMessage}` };
       }
     });
 
@@ -139,7 +140,7 @@ export default function Home() {
     const errorCount = results.filter(r => r.status === 'error').length;
     toast({
       title: 'Processing Complete',
-      description: `${successCount} receipts ready for verification. ${errorCount} failed.`,
+      description: `${successCount} receipts ready for your review. ${errorCount} failed.`,
     });
   };
   
@@ -164,7 +165,7 @@ export default function Home() {
             <section className="mt-8" aria-labelledby="receipts-heading">
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
                 <h2 id="receipts-heading" className="text-xl font-semibold">Your Receipts ({files.length})</h2>
-                <Button onClick={handleProcessReceipts} disabled={isProcessing || queuedFilesCount === 0}>
+                <Button onClick={handleProcessReceipts} disabled={isProcessing || queuedFilesCount === 0} size="lg">
                   <Sparkles className="mr-2 h-4 w-4" />
                   {isProcessing ? 'Processing...' : `Process ${queuedFilesCount} New Receipt${queuedFilesCount !== 1 ? 's' : ''}`}
                 </Button>
@@ -183,10 +184,10 @@ export default function Home() {
           )}
 
           {files.length === 0 && !isProcessing && (
-             <div className="text-center py-16 px-4 text-muted-foreground border border-dashed rounded-lg mt-8">
-                <h2 className="text-lg font-medium text-foreground">Ready to start?</h2>
-                <p className="mt-2">Upload your receipts to extract financial data instantly.</p>
-                <p className="text-sm mt-1">Your data is processed in-session and is never stored on our servers.</p>
+             <div className="text-center py-16 px-4 text-muted-foreground border-2 border-dashed rounded-lg mt-8">
+                <h2 className="text-xl font-semibold text-foreground">Ready to begin?</h2>
+                <p className="mt-2 text-base">Drag and drop your receipts, or click 'Choose Files' to start.</p>
+                <p className="text-sm mt-1">Your data is processed in-session and is never stored on a server.</p>
              </div>
           )}
         </div>
