@@ -21,10 +21,13 @@ const ExtractReceiptDataInputSchema = z.object({
 export type ExtractReceiptDataInput = z.infer<typeof ExtractReceiptDataInputSchema>;
 
 const ExtractReceiptDataOutputSchema = z.object({
-  date: z.string().describe('The date on the receipt.'),
-  amount: z.number().describe('The total amount on the receipt.'),
-  vendor: z.string().describe('The name of the vendor.'),
-  items: z.array(z.string()).describe('The list of items on the receipt.'),
+  merchant_name: z.string().describe('The name of the merchant or vendor.'),
+  amount: z.number().describe('The total amount on the receipt, in PKR.'),
+  date: z.string().describe('The date on the receipt in YYYY-MM-DD format.'),
+  items: z.array(z.string()).describe('The list of individual items purchased.'),
+  location: z.string().optional().describe('The address of the merchant, if available.'),
+  confidence_score: z.number().describe('A score from 0 to 1 indicating the confidence in the extracted data.'),
+  detected_language: z.string().describe('The detected language of the receipt (e.g., "English", "Urdu").'),
 });
 export type ExtractReceiptDataOutput = z.infer<typeof ExtractReceiptDataOutputSchema>;
 
@@ -32,35 +35,20 @@ export async function extractReceiptData(input: ExtractReceiptDataInput): Promis
   return extractReceiptDataFlow(input);
 }
 
-const isFinanceRelated = ai.defineTool(
-  {
-    name: 'isFinanceRelated',
-    description: 'Determines if an item on a receipt is finance related.',
-    inputSchema: z.object({
-      item: z.string().describe('The item to check.'),
-    }),
-    outputSchema: z.boolean(),
-  },
-  async (input) => {
-    // TODO: Implement the logic to determine if the item is finance-related
-    // For now, always return true
-    return true;
-  }
-);
-
 const prompt = ai.definePrompt({
   name: 'extractReceiptDataPrompt',
   input: {schema: ExtractReceiptDataInputSchema},
   output: {schema: ExtractReceiptDataOutputSchema},
-  tools: [isFinanceRelated],
-  prompt: `You are an expert financial data extractor. Extract the key financial data from the receipt provided.
+  prompt: `You are an expert OCR and data extraction agent specializing in financial documents. Analyze the provided receipt image, which may contain text in English or Urdu.
+  Extract the following information and return it as a structured JSON object.
 
-  Date: The date on the receipt.
-  Amount: The total amount on the receipt.
-  Vendor: The name of the vendor.
-  Items: A list of items on the receipt.
-
-  Only include an item in the Items list after checking with the isFinanceRelated tool to see if it is finance related.
+  - merchant_name: The name of the business or store.
+  - amount: The total amount of the transaction. The currency is Pakistani Rupee (PKR).
+  - date: The date of the transaction in YYYY-MM-DD format.
+  - items: An array of strings, where each string is an individual item purchased.
+  - location: The physical address of the merchant, if it is present on the receipt. If not available, return an empty string.
+  - confidence_score: Your confidence in the accuracy of the extracted data, as a number between 0 and 1.
+  - detected_language: The primary language detected on the receipt (e.g., "English", "Urdu", "Mixed").
 
   Receipt: {{media url=receiptDataUri}}`,
 });

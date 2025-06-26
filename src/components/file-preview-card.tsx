@@ -74,10 +74,13 @@ export function FilePreviewCard({ fileWrapper, onRemove }: FilePreviewCardProps)
             <AccordionItem value="item-1" className="border-b-0">
               <AccordionTrigger className="text-sm py-1 hover:no-underline">View Data</AccordionTrigger>
               <AccordionContent className="text-xs space-y-1 pt-2 text-muted-foreground">
-                <p><strong className="text-foreground">Vendor:</strong> {extractedData.vendor}</p>
+                <p><strong className="text-foreground">Merchant:</strong> {extractedData.merchant_name}</p>
                 <p><strong className="text-foreground">Date:</strong> {extractedData.date}</p>
-                <p><strong className="text-foreground">Amount:</strong> {extractedData.amount}</p>
-                <p><strong className="text-foreground">Items:</strong> {extractedData.items.join(', ')}</p>
+                <p><strong className="text-foreground">Amount:</strong> {extractedData.amount} PKR</p>
+                <p><strong className="text-foreground">Location:</strong> {extractedData.location || 'N/A'}</p>
+                <p className="truncate"><strong className="text-foreground">Items:</strong> {extractedData.items.join(', ')}</p>
+                <p><strong className="text-foreground">Confidence:</strong> {(extractedData.confidence_score * 100).toFixed(0)}%</p>
+                <p><strong className="text-foreground">Language:</strong> {extractedData.detected_language}</p>
               </AccordionContent>
             </AccordionItem>
           </Accordion>

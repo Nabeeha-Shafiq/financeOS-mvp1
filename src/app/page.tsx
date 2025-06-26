@@ -14,6 +14,27 @@ const MAX_FILES = 50;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_FILE_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
 
+const withRetry = async <T,>(
+  fn: () => Promise<T>,
+  retries = 3,
+  delay = 1000,
+  finalErrMessage = 'Failed after multiple retries'
+): Promise<T> => {
+  let lastError: unknown;
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      console.log(`Attempt ${i + 1} failed. Retrying in ${delay * Math.pow(2, i)}ms...`);
+      if (i < retries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
+      }
+    }
+  }
+  throw new Error(finalErrMessage, { cause: lastError });
+};
+
 export default function Home() {
   const [files, setFiles] = useState<FileWrapper[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -82,7 +103,7 @@ export default function Home() {
     const promises = filesToProcess.map(async (fileWrapper) => {
       try {
         const receiptDataUri = await readFileAsDataURL(fileWrapper.file);
-        const result = await extractReceiptData({ receiptDataUri });
+        const result = await withRetry(() => extractReceiptData({ receiptDataUri }));
         return { ...fileWrapper, id: fileWrapper.id, status: 'success' as const, extractedData: result };
       } catch (error) {
         console.error('Error processing receipt:', error);
