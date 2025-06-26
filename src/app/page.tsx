@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { ReceiptDropzone } from '@/components/receipt-dropzone';
 import { FilePreviewGrid } from '@/components/file-preview-grid';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { extractReceiptData } from '@/ai/flows/extract-receipt-data';
 import { readFileAsDataURL } from '@/lib/utils';
 import type { FileWrapper, ExtractReceiptDataOutput } from '@/types';
 import { Bot, Sparkles } from 'lucide-react';
+import { SessionSummary } from '@/components/session-summary';
 
 const MAX_FILES = 50;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -144,6 +145,8 @@ export default function Home() {
   
   const queuedFilesCount = files.filter(f => f.status === 'queued').length;
   const needsVerificationCount = files.filter(f => f.status === 'success').length;
+  const acceptedFiles = useMemo(() => files.filter(f => f.status === 'accepted'), [files]);
+
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -173,6 +176,10 @@ export default function Home() {
                 </div>
               )}
             </section>
+          )}
+
+          {acceptedFiles.length > 0 && (
+            <SessionSummary acceptedFiles={acceptedFiles} />
           )}
 
           {files.length === 0 && !isProcessing && (
