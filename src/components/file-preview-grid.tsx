@@ -1,12 +1,13 @@
-import type { FileWrapper } from '@/types';
+import type { FileWrapper, ExtractReceiptDataOutput } from '@/types';
 import { FilePreviewCard } from './file-preview-card';
 
 interface FilePreviewGridProps {
   files: FileWrapper[];
   onRemoveFile: (id: string) => void;
+  onAcceptFile: (id: string, data: ExtractReceiptDataOutput) => void;
 }
 
-export function FilePreviewGrid({ files, onRemoveFile }: FilePreviewGridProps) {
+export function FilePreviewGrid({ files, onRemoveFile, onAcceptFile }: FilePreviewGridProps) {
   if (files.length === 0) return null;
 
   return (
@@ -16,6 +17,7 @@ export function FilePreviewGrid({ files, onRemoveFile }: FilePreviewGridProps) {
           key={fileWrapper.id}
           fileWrapper={fileWrapper}
           onRemove={onRemoveFile}
+          onAccept={onAcceptFile}
         />
       ))}
     </div>

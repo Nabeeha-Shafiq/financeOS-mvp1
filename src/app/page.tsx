@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { extractReceiptData } from '@/ai/flows/extract-receipt-data';
 import { readFileAsDataURL } from '@/lib/utils';
-import type { FileWrapper } from '@/types';
+import type { FileWrapper, ExtractReceiptDataOutput } from '@/types';
 import { Bot, Sparkles } from 'lucide-react';
 
 const MAX_FILES = 50;
@@ -90,10 +90,18 @@ export default function Home() {
     setFiles((prevFiles) => prevFiles.filter((file) => file.id !== id));
   }, []);
 
+  const handleAcceptFile = useCallback((id: string, data: ExtractReceiptDataOutput) => {
+    setFiles(prevFiles => prevFiles.map(f => f.id === id ? { ...f, status: 'accepted', extractedData: data } : f));
+    toast({
+        title: "Receipt Accepted",
+        description: `${data.merchant_name} has been added.`
+    })
+  }, [toast]);
+
   const handleProcessReceipts = async () => {
     const filesToProcess = files.filter(f => f.status === 'queued');
     if (filesToProcess.length === 0) {
-        toast({ title: "No receipts to process."});
+        toast({ title: "No new receipts to process."});
         return;
     };
 
@@ -126,13 +134,16 @@ export default function Home() {
     });
 
     setIsProcessing(false);
+    const successCount = results.filter(r => r.status === 'success').length;
+    const errorCount = results.filter(r => r.status === 'error').length;
     toast({
       title: 'Processing Complete',
-      description: 'All queued receipts have been processed.',
+      description: `${successCount} receipts ready for verification. ${errorCount} failed.`,
     });
   };
   
   const queuedFilesCount = files.filter(f => f.status === 'queued').length;
+  const needsVerificationCount = files.filter(f => f.status === 'success').length;
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -152,10 +163,15 @@ export default function Home() {
                 <h2 id="receipts-heading" className="text-xl font-semibold">Your Receipts ({files.length})</h2>
                 <Button onClick={handleProcessReceipts} disabled={isProcessing || queuedFilesCount === 0}>
                   <Sparkles className="mr-2 h-4 w-4" />
-                  {isProcessing ? 'Processing...' : `Process ${queuedFilesCount} Receipt${queuedFilesCount !== 1 ? 's' : ''}`}
+                  {isProcessing ? 'Processing...' : `Process ${queuedFilesCount} New Receipt${queuedFilesCount !== 1 ? 's' : ''}`}
                 </Button>
               </div>
-              <FilePreviewGrid files={files} onRemoveFile={handleRemoveFile} />
+              <FilePreviewGrid files={files} onRemoveFile={handleRemoveFile} onAcceptFile={handleAcceptFile} />
+              {needsVerificationCount > 0 && (
+                <div className="mt-4 p-4 bg-primary/10 border border-primary/20 rounded-lg text-center">
+                    <p className="text-primary-foreground font-medium">{needsVerificationCount} receipt{needsVerificationCount !== 1 ? 's' : ''} ready for your review.</p>
+                </div>
+              )}
             </section>
           )}
 
