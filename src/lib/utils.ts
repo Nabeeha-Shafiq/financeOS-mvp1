@@ -1,6 +1,9 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import imageCompression from 'browser-image-compression';
+import JSZip from 'jszip';
+import heic2any from 'heic2any';
+
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -44,4 +47,40 @@ export async function compressImage(file: File): Promise<File> {
     console.error('Image compression failed:', error);
     return file; // Fallback to original file
   }
+}
+
+export async function handleZipFile(file: File): Promise<File[]> {
+    const zip = await JSZip.loadAsync(file);
+    const imageFiles: File[] = [];
+    const supportedExtensions = ['.jpg', '.jpeg', '.png', '.pdf', '.heic', '.heif'];
+
+    const promises = Object.values(zip.files).map(async (zipEntry) => {
+        if (!zipEntry.dir && supportedExtensions.some(ext => zipEntry.name.toLowerCase().endsWith(ext))) {
+            const blob = await zipEntry.async('blob');
+            const newFile = new File([blob], zipEntry.name, { type: blob.type });
+            imageFiles.push(newFile);
+        }
+    });
+    
+    await Promise.all(promises);
+    return imageFiles;
+}
+
+export async function convertHeic(file: File): Promise<File> {
+    const isHeic = file.type === 'image/heic' || file.type === 'image/heif' || file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
+    if (!isHeic) {
+        return file;
+    }
+    try {
+        const convertedBlob = await heic2any({
+            blob: file,
+            toType: "image/jpeg",
+            quality: 0.8,
+        }) as Blob;
+        const newFileName = file.name.substring(0, file.name.lastIndexOf('.')) + '.jpeg';
+        return new File([convertedBlob], newFileName, { type: "image/jpeg", lastModified: file.lastModified });
+    } catch (error) {
+        console.error("HEIC conversion failed for", file.name, error);
+        throw new Error(`Failed to convert HEIC file: ${file.name}`);
+    }
 }

@@ -72,10 +72,10 @@ export function ReceiptDropzone({ onFilesAdded, disabled }: ReceiptDropzoneProps
       <div className="flex flex-col items-center justify-center text-center">
         <UploadCloud className="w-12 h-12 text-muted-foreground" />
         <p className="mt-4 text-lg font-medium text-foreground">
-          Drag & drop receipts here
+          Drag & drop receipts here, or upload a ZIP file
         </p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Supports JPG, PNG, PDF. Max 5MB per file, 50 files per session.
+          Supports JPG, PNG, PDF, HEIC. Max 5MB per file, 100 files per session.
         </p>
       </div>
       <div className="flex flex-col sm:flex-row gap-4 pt-4">
@@ -93,7 +93,7 @@ export function ReceiptDropzone({ onFilesAdded, disabled }: ReceiptDropzoneProps
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/jpeg,image/png,application/pdf"
+        accept="image/jpeg,image/png,application/pdf,image/heic,image/heif,application/zip"
         className="hidden"
         onChange={onFileSelect}
         disabled={disabled}

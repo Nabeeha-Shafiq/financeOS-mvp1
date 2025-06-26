@@ -4,17 +4,18 @@ import { useState, useCallback, useMemo } from 'react';
 import { ReceiptDropzone } from '@/components/receipt-dropzone';
 import { FilePreviewGrid } from '@/components/file-preview-grid';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { extractReceiptData } from '@/ai/flows/extract-receipt-data';
-import { readFileAsDataURL, compressImage } from '@/lib/utils';
+import { readFileAsDataURL, compressImage, handleZipFile, convertHeic } from '@/lib/utils';
 import type { FileWrapper, ExtractReceiptDataOutput } from '@/types';
 import { Bot, Sparkles, PlusCircle } from 'lucide-react';
 import { SessionSummary } from '@/components/session-summary';
 import { ManualExpenseForm } from '@/components/manual-expense-form';
 
-const MAX_FILES = 50;
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB, will be compressed
-const ACCEPTED_FILE_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
+const MAX_FILES = 100;
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const ACCEPTED_FILE_TYPES = ['image/jpeg', 'image/png', 'application/pdf', 'image/heic', 'image/heif'];
 
 const withRetry = async <T,>(
   fn: () => Promise<T>,
@@ -40,53 +41,101 @@ const withRetry = async <T,>(
 export default function Home() {
   const [files, setFiles] = useState<FileWrapper[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState({ processed: 0, total: 0 });
   const { toast } = useToast();
 
-  const handleFilesAdded = useCallback((addedFiles: File[]) => {
-    let hasError = false;
+  const addFileToState = useCallback((file: File, currentFiles: FileWrapper[]) => {
+    const fileId = `${file.name}-${file.lastModified}-${file.size}`;
+    if (currentFiles.some(f => f.id === fileId) || files.some(f => f.id === fileId)) {
+      console.warn(`Skipping duplicate file: ${file.name}`);
+      return null;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      toast({
+        variant: 'destructive',
+        title: 'File too large',
+        description: `File "${file.name}" exceeds the 5MB limit.`,
+      });
+      return null;
+    }
+    const fileType = file.type || '';
+    const fileName = file.name.toLowerCase();
+    
+    const isSupported = ACCEPTED_FILE_TYPES.includes(fileType) || 
+                        fileName.endsWith('.pdf') || 
+                        fileName.endsWith('.jpeg') || 
+                        fileName.endsWith('.jpg') ||
+                        fileName.endsWith('.png') ||
+                        fileName.endsWith('.heic') ||
+                        fileName.endsWith('.heif');
 
-    if (files.length + addedFiles.length > MAX_FILES) {
+    if (!isSupported) {
+        toast({
+            variant: 'destructive',
+            title: 'Invalid file type',
+            description: `File type for "${file.name}" (${fileType}) is not supported.`,
+        });
+        return null;
+    }
+
+    return {
+      id: fileId,
+      file,
+      previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
+      status: 'queued',
+    } as FileWrapper;
+  }, [files, toast]);
+
+  const handleFilesAdded = useCallback(async (incomingFiles: File[]) => {
+    let filesToProcess: File[] = [...incomingFiles];
+    let finalFiles: File[] = [];
+
+    const zipFiles = filesToProcess.filter(f => f.type === 'application/zip' || f.name.toLowerCase().endsWith('.zip'));
+    filesToProcess = filesToProcess.filter(f => !zipFiles.includes(f));
+    
+    if (zipFiles.length > 0) {
+        toast({ title: `Unpacking ${zipFiles.length} ZIP file(s)...`});
+        for(const zipFile of zipFiles) {
+            try {
+                const extracted = await handleZipFile(zipFile);
+                filesToProcess.push(...extracted);
+            } catch (error) {
+                 toast({ variant: 'destructive', title: 'ZIP Error', description: `Could not unpack ${zipFile.name}.` });
+            }
+        }
+    }
+
+    const heicFiles = filesToProcess.filter(f => f.type === 'image/heic' || f.type === 'image/heif' || f.name.toLowerCase().endsWith('.heic') || f.name.toLowerCase().endsWith('.heif'));
+    const otherFiles = filesToProcess.filter(f => !heicFiles.includes(f));
+    
+    if (heicFiles.length > 0) {
+        toast({ title: `Converting ${heicFiles.length} HEIC file(s)...`});
+        const converted = await Promise.all(heicFiles.map(convertHeic));
+        finalFiles.push(...converted);
+    }
+    finalFiles.push(...otherFiles);
+
+    const newFileWrappers = finalFiles.reduce((acc, file) => {
+        if (files.length + acc.length >= MAX_FILES) return acc;
+        const wrapper = addFileToState(file, acc);
+        if (wrapper) {
+            acc.push(wrapper);
+        }
+        return acc;
+    }, [] as FileWrapper[]);
+
+    if (files.length + newFileWrappers.length > MAX_FILES) {
       toast({
         variant: 'destructive',
         title: 'Upload limit exceeded',
-        description: `You can only upload up to ${MAX_FILES} receipts at a time.`,
+        description: `Adding these files would exceed the ${MAX_FILES} file limit. Some files were not added.`,
       });
-      hasError = true;
     }
-    
-    if (hasError) return;
 
-    const newFiles = addedFiles.reduce((acc, file) => {
-      if (files.some(f => f.id === `${file.name}-${file.lastModified}`)) {
-        return acc;
-      }
-      if (file.size > MAX_FILE_SIZE) {
-        toast({
-          variant: 'destructive',
-          title: 'File too large',
-          description: `File "${file.name}" exceeds the 10MB limit.`,
-        });
-        return acc;
-      }
-      if (!ACCEPTED_FILE_TYPES.includes(file.type)) {
-        toast({
-          variant: 'destructive',
-          title: 'Invalid file type',
-          description: `File type for "${file.name}" is not supported. Please use JPG, PNG, or PDF.`,
-        });
-        return acc;
-      }
-      acc.push({
-        id: `${file.name}-${file.lastModified}`,
-        file,
-        previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
-        status: 'queued',
-      });
-      return acc;
-    }, [] as FileWrapper[]);
-
-    setFiles((prevFiles) => [...prevFiles, ...newFiles]);
-  }, [files, toast]);
+    if (newFileWrappers.length > 0) {
+        setFiles((prevFiles) => [...prevFiles, ...newFileWrappers].slice(0, MAX_FILES));
+    }
+  }, [files, toast, addFileToState]);
 
   const handleRemoveFile = useCallback((id: string) => {
     setFiles((prevFiles) => prevFiles.filter((file) => file.id !== id));
@@ -124,9 +173,12 @@ export default function Home() {
     };
 
     setIsProcessing(true);
+    setProcessingProgress({ processed: 0, total: filesToProcess.length });
     setFiles((prev) => prev.map(f => f.status === 'queued' ? { ...f, status: 'processing' } : f));
 
-    const promises = filesToProcess.map(async (fileWrapper) => {
+    let processedCount = 0;
+    
+    for (const fileWrapper of filesToProcess) {
       try {
         const compressedFile = await compressImage(fileWrapper.file);
         const receiptDataUri = await readFileAsDataURL(compressedFile);
@@ -134,44 +186,22 @@ export default function Home() {
         
         const newStatus = result.confidence_score >= 0.5 ? 'accepted' as const : 'success' as const;
 
-        return { ...fileWrapper, id: fileWrapper.id, status: newStatus, extractedData: result };
+        setFiles(prev => prev.map(f => f.id === fileWrapper.id ? { ...f, status: newStatus, extractedData: result } : f));
       } catch (error) {
         console.error('Error processing receipt:', error);
         const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-        return { ...fileWrapper, id: fileWrapper.id, status: 'error' as const, errorMessage: `AI processing failed. ${errorMessage}` };
+        setFiles(prev => prev.map(f => f.id === fileWrapper.id ? { ...f, status: 'error' as const, errorMessage: `AI processing failed. ${errorMessage}` } : f));
+      } finally {
+        processedCount++;
+        setProcessingProgress({ processed: processedCount, total: filesToProcess.length });
       }
-    });
-
-    const results = await Promise.all(promises);
-
-    setFiles(prevFiles => {
-        const newFiles = [...prevFiles];
-        results.forEach(res => {
-            const index = newFiles.findIndex(f => f.id === res.id);
-            if(index !== -1) {
-                newFiles[index] = { ...newFiles[index], ...res };
-            }
-        });
-        return newFiles;
-    });
+    }
 
     setIsProcessing(false);
-    
-    const autoAcceptedCount = results.filter(r => r.status === 'accepted').length;
-    const needsVerificationCount = results.filter(r => r.status === 'success').length;
-    const errorCount = results.filter(r => r.status === 'error').length;
-
-    let descriptionParts: string[] = [];
-    if (autoAcceptedCount > 0) descriptionParts.push(`${autoAcceptedCount} auto-accepted`);
-    if (needsVerificationCount > 0) descriptionParts.push(`${needsVerificationCount} need review`);
-    if (errorCount > 0) descriptionParts.push(`${errorCount} failed`);
-
-    if (descriptionParts.length > 0) {
-      toast({
-        title: 'Processing Complete',
-        description: descriptionParts.join(', ') + '.',
-      });
-    }
+    toast({
+      title: 'Processing Complete',
+      description: `Finished processing ${filesToProcess.length} receipts. Check results below.`,
+    });
   };
   
   const queuedFilesCount = files.filter(f => f.status === 'queued').length;
@@ -197,19 +227,29 @@ export default function Home() {
                 <h2 id="uploads-heading" className="text-xl font-semibold">Your Uploads ({files.length})</h2>
                 <div className="flex gap-2">
                     <ManualExpenseForm onAddExpense={handleAddManualExpense}>
-                        <Button variant="outline" size="lg">
+                        <Button variant="outline" size="lg" disabled={isProcessing}>
                             <PlusCircle className="mr-2 h-4 w-4" />
                             Add Manually
                         </Button>
                     </ManualExpenseForm>
                     <Button onClick={handleProcessReceipts} disabled={isProcessing || queuedFilesCount === 0} size="lg">
                     <Sparkles className="mr-2 h-4 w-4" />
-                    {isProcessing ? 'Processing...' : `Process ${queuedFilesCount} New Receipt${queuedFilesCount !== 1 ? 's' : ''}`}
+                    {isProcessing 
+                        ? `Processing ${processingProgress.processed}/${processingProgress.total}...` 
+                        : `Process ${queuedFilesCount} New Receipt${queuedFilesCount !== 1 ? 's' : ''}`}
                     </Button>
                 </div>
               </div>
+
+              {isProcessing && (
+                <div className="my-4 space-y-2">
+                    <Progress value={(processingProgress.total > 0 ? (processingProgress.processed / processingProgress.total) : 0) * 100} />
+                    <p className="text-sm text-muted-foreground text-center">Please keep this tab open until processing is complete.</p>
+                </div>
+              )}
+
               <FilePreviewGrid files={files} onRemoveFile={handleRemoveFile} onAcceptFile={handleAcceptFile} />
-              {needsVerificationCount > 0 && (
+              {needsVerificationCount > 0 && !isProcessing && (
                 <div className="mt-4 p-4 bg-primary/10 border border-primary/20 rounded-lg text-center">
                     <p className="text-primary-foreground font-medium">{needsVerificationCount} receipt{needsVerificationCount !== 1 ? 's' : ''} ready for your review.</p>
                 </div>
