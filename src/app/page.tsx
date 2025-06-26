@@ -114,7 +114,10 @@ export default function Home() {
         const compressedFile = await compressImage(fileWrapper.file);
         const receiptDataUri = await readFileAsDataURL(compressedFile);
         const result = await withRetry(() => extractReceiptData({ receiptDataUri }));
-        return { ...fileWrapper, id: fileWrapper.id, status: 'success' as const, extractedData: result };
+        
+        const newStatus = result.confidence_score >= 0.5 ? 'accepted' as const : 'success' as const;
+
+        return { ...fileWrapper, id: fileWrapper.id, status: newStatus, extractedData: result };
       } catch (error) {
         console.error('Error processing receipt:', error);
         const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
@@ -136,12 +139,22 @@ export default function Home() {
     });
 
     setIsProcessing(false);
-    const successCount = results.filter(r => r.status === 'success').length;
+    
+    const autoAcceptedCount = results.filter(r => r.status === 'accepted').length;
+    const needsVerificationCount = results.filter(r => r.status === 'success').length;
     const errorCount = results.filter(r => r.status === 'error').length;
-    toast({
-      title: 'Processing Complete',
-      description: `${successCount} receipts ready for your review. ${errorCount} failed.`,
-    });
+
+    let descriptionParts: string[] = [];
+    if (autoAcceptedCount > 0) descriptionParts.push(`${autoAcceptedCount} auto-accepted`);
+    if (needsVerificationCount > 0) descriptionParts.push(`${needsVerificationCount} need review`);
+    if (errorCount > 0) descriptionParts.push(`${errorCount} failed`);
+
+    if (descriptionParts.length > 0) {
+      toast({
+        title: 'Processing Complete',
+        description: descriptionParts.join(', ') + '.',
+      });
+    }
   };
   
   const queuedFilesCount = files.filter(f => f.status === 'queued').length;

@@ -60,7 +60,7 @@ const prompt = ai.definePrompt({
   - merchant_name: The name of the business or store.
   - amount: The total amount of the transaction. The currency is Pakistani Rupee (PKR).
   - date: The date of the transaction in YYYY-MM-DD format.
-  - items: An array of strings, where each string is an individual item purchased. If an item is in Urdu, transliterate it to Roman Urdu (e.g., "دال" should become "Daal", not "Pulses"). Do not translate it to English.
+  - items: An array of strings, where each string is an individual item purchased. If an item is in Urdu, transliterate it to Roman Urdu. For example, "دال" should become "Daal", not "Pulses", and "دودھ" should become "Doodh", not "Milk". Do not translate the item names to English.
   - location: The physical address of the merchant, if it is present on the receipt. If not available, return an empty string.
   - category: Based on the merchant and items, suggest the most relevant expense category. You must choose one from this list: ${CATEGORIES.join(', ')}.
   - confidence_score: Your confidence in the accuracy of the extracted data, as a number between 0 and 1.
