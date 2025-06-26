@@ -8,8 +8,9 @@ import { useToast } from '@/hooks/use-toast';
 import { extractReceiptData } from '@/ai/flows/extract-receipt-data';
 import { readFileAsDataURL, compressImage } from '@/lib/utils';
 import type { FileWrapper, ExtractReceiptDataOutput } from '@/types';
-import { Bot, Sparkles } from 'lucide-react';
+import { Bot, Sparkles, PlusCircle } from 'lucide-react';
 import { SessionSummary } from '@/components/session-summary';
+import { ManualExpenseForm } from '@/components/manual-expense-form';
 
 const MAX_FILES = 50;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB, will be compressed
@@ -98,6 +99,22 @@ export default function Home() {
         description: `${data.merchant_name} has been successfully added to your session.`
     })
   }, [toast]);
+  
+  const handleAddManualExpense = useCallback((data: ExtractReceiptDataOutput) => {
+    const dummyFile = new File(["manual entry"], "manual.txt", { type: "text/plain" });
+    const newFile: FileWrapper = {
+        id: `manual-${Date.now()}`,
+        file: dummyFile,
+        previewUrl: '',
+        status: 'accepted',
+        extractedData: { ...data, isManual: true },
+    };
+    setFiles(prev => [...prev, newFile]);
+    toast({
+        title: "Manual Expense Added",
+        description: `Your expense has been successfully logged.`
+    })
+  }, [toast]);
 
   const handleProcessReceipts = async () => {
     const filesToProcess = files.filter(f => f.status === 'queued');
@@ -175,13 +192,21 @@ export default function Home() {
           <ReceiptDropzone onFilesAdded={handleFilesAdded} disabled={isProcessing} />
           
           {files.length > 0 && (
-            <section className="mt-8" aria-labelledby="receipts-heading">
+            <section className="mt-8" aria-labelledby="uploads-heading">
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
-                <h2 id="receipts-heading" className="text-xl font-semibold">Your Receipts ({files.length})</h2>
-                <Button onClick={handleProcessReceipts} disabled={isProcessing || queuedFilesCount === 0} size="lg">
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  {isProcessing ? 'Processing...' : `Process ${queuedFilesCount} New Receipt${queuedFilesCount !== 1 ? 's' : ''}`}
-                </Button>
+                <h2 id="uploads-heading" className="text-xl font-semibold">Your Uploads ({files.length})</h2>
+                <div className="flex gap-2">
+                    <ManualExpenseForm onAddExpense={handleAddManualExpense}>
+                        <Button variant="outline" size="lg">
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Add Manually
+                        </Button>
+                    </ManualExpenseForm>
+                    <Button onClick={handleProcessReceipts} disabled={isProcessing || queuedFilesCount === 0} size="lg">
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    {isProcessing ? 'Processing...' : `Process ${queuedFilesCount} New Receipt${queuedFilesCount !== 1 ? 's' : ''}`}
+                    </Button>
+                </div>
               </div>
               <FilePreviewGrid files={files} onRemoveFile={handleRemoveFile} onAcceptFile={handleAcceptFile} />
               {needsVerificationCount > 0 && (
@@ -200,7 +225,15 @@ export default function Home() {
              <div className="text-center py-16 px-4 text-muted-foreground border-2 border-dashed rounded-lg mt-8">
                 <h2 className="text-xl font-semibold text-foreground">Ready to begin?</h2>
                 <p className="mt-2 text-base">Drag and drop your receipts, or click 'Choose Files' to start.</p>
-                <p className="text-sm mt-1">Your data is processed in-session and is never stored on a server.</p>
+                <div className="mt-4">
+                    <ManualExpenseForm onAddExpense={handleAddManualExpense}>
+                        <Button variant="outline" size="lg">
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Or Add an Expense Manually
+                        </Button>
+                    </ManualExpenseForm>
+                </div>
+                <p className="text-sm mt-4">Your data is processed in-session and is never stored on a server.</p>
              </div>
           )}
         </div>

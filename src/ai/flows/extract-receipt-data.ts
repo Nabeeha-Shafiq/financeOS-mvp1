@@ -43,6 +43,7 @@ const ExtractReceiptDataOutputSchema = z.object({
   category: z.string().describe(`The suggested expense category. Choose one of the following: ${CATEGORIES.join(', ')}.`),
   confidence_score: z.number().describe('A score from 0 to 1 indicating the confidence in the extracted data.'),
   detected_language: z.string().describe('The detected language of the receipt (e.g., "English", "Urdu").'),
+  isManual: z.boolean().optional().describe('Indicates if the entry was added manually by the user.'),
 });
 export type ExtractReceiptDataOutput = z.infer<typeof ExtractReceiptDataOutputSchema>;
 

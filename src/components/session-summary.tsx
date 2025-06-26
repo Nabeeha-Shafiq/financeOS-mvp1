@@ -10,6 +10,7 @@ import { Label } from './ui/label';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { ChevronDown } from 'lucide-react';
 import { FbrReportGenerator } from './fbr-report-generator';
+import { ExpenseListView } from './expense-list-view';
 
 const FBR_DEDUCTIBLE_CATEGORIES = ['Medical', 'Education'];
 const CHART_COLORS = [
@@ -203,6 +204,11 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
         {/* Chart */}
         <div className="md:col-span-4">
             <ExpensePieChart data={pieChartData} />
+        </div>
+        
+        {/* Expense List View */}
+        <div className="md:col-span-4">
+            <ExpenseListView expenses={filteredReceipts} />
         </div>
 
         {/* FBR Report Generator */}

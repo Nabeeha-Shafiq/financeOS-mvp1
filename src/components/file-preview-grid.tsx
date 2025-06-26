@@ -8,11 +8,13 @@ interface FilePreviewGridProps {
 }
 
 export function FilePreviewGrid({ files, onRemoveFile, onAcceptFile }: FilePreviewGridProps) {
-  if (files.length === 0) return null;
+  const receiptFiles = files.filter(f => !f.extractedData?.isManual);
+  
+  if (receiptFiles.length === 0) return null;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-      {files.map((fileWrapper) => (
+      {receiptFiles.map((fileWrapper) => (
         <FilePreviewCard
           key={fileWrapper.id}
           fileWrapper={fileWrapper}
