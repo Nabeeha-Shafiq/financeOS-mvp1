@@ -7,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FbrComplianceReport } from '@/components/reports/fbr-compliance-report';
 import { ExpenseSummaryReport } from '@/components/reports/expense-summary-report';
 import { VendorAnalysisReport } from '@/components/reports/vendor-analysis-report';
+import { ProfitLossReport } from '@/components/reports/profit-loss-report';
+import { CashFlowReport } from '@/components/reports/cash-flow-report';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Lightbulb } from 'lucide-react';
 
@@ -41,7 +43,7 @@ export default function ReportsPage() {
         return [...receiptExpenses, ...bankExpenses];
     }, [acceptedFiles, transactions]);
 
-    if (unifiedExpenses.length === 0) {
+    if (unifiedExpenses.length === 0 && transactions.length === 0) {
         return (
             <div className="max-w-3xl mx-auto">
                  <Card>
@@ -79,9 +81,9 @@ export default function ReportsPage() {
                         <TabsList className="grid w-full grid-cols-3 md:grid-cols-5">
                             <TabsTrigger value="expense-summary">Expense Summary</TabsTrigger>
                             <TabsTrigger value="vendor-analysis">Vendor Analysis</TabsTrigger>
+                            <TabsTrigger value="pnl">Profit &amp; Loss</TabsTrigger>
+                            <TabsTrigger value="cash-flow">Cash Flow</TabsTrigger>
                             <TabsTrigger value="fbr-compliance">FBR Compliance</TabsTrigger>
-                            <TabsTrigger value="pnl" disabled>Profit & Loss</TabsTrigger>
-                            <TabsTrigger value="cash-flow" disabled>Cash Flow</TabsTrigger>
                         </TabsList>
                         <TabsContent value="expense-summary">
                            <ExpenseSummaryReport expenses={unifiedExpenses} />
@@ -89,14 +91,14 @@ export default function ReportsPage() {
                         <TabsContent value="vendor-analysis">
                             <VendorAnalysisReport expenses={unifiedExpenses} />
                         </TabsContent>
-                        <TabsContent value="fbr-compliance">
-                            <FbrComplianceReport expenses={unifiedExpenses} />
-                        </TabsContent>
-                        <TabsContent value="pnl">
-                            <p className="text-muted-foreground text-center p-8">Profit & Loss report coming soon.</p>
+                         <TabsContent value="pnl">
+                           <ProfitLossReport expenses={unifiedExpenses} transactions={transactions} />
                         </TabsContent>
                         <TabsContent value="cash-flow">
-                             <p className="text-muted-foreground text-center p-8">Cash flow analysis coming soon.</p>
+                             <CashFlowReport transactions={transactions} />
+                        </TabsContent>
+                        <TabsContent value="fbr-compliance">
+                            <FbrComplianceReport expenses={unifiedExpenses} />
                         </TabsContent>
                     </Tabs>
                 </CardContent>
