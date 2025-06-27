@@ -53,6 +53,7 @@ export async function extractReceiptData(input: ExtractReceiptDataInput): Promis
 
 const prompt = ai.definePrompt({
   name: 'extractReceiptDataPrompt',
+  model: 'googleai/gemini-1.5-pro-latest',
   input: {schema: ExtractReceiptDataInputSchema},
   output: {schema: ExtractReceiptDataOutputSchema},
   prompt: `You are an expert OCR and data extraction agent specializing in financial documents. Analyze the provided receipt image, which may contain text in English or Urdu.
