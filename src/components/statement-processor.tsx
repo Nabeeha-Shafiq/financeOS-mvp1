@@ -14,7 +14,8 @@ import { UploadCloud, Sparkles } from 'lucide-react';
 const ACCEPTED_FILE_TYPES = [
   'image/jpeg', 'image/png', 'application/pdf', 
   'text/csv', 'application/vnd.ms-excel', 
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/html'
 ];
 
 export function StatementProcessor() {
@@ -32,7 +33,9 @@ export function StatementProcessor() {
     const isSupported = ACCEPTED_FILE_TYPES.includes(fileType) ||
                         fileName.endsWith('.csv') ||
                         fileName.endsWith('.xls') ||
-                        fileName.endsWith('.xlsx');
+                        fileName.endsWith('.xlsx') ||
+                        fileName.endsWith('.pdf') ||
+                        fileName.endsWith('.html');
 
     if (!isSupported) {
       toast({
@@ -99,18 +102,28 @@ export function StatementProcessor() {
     try {
       let input = {};
       const fileType = statementFile.type;
+      const fileName = statementFile.name.toLowerCase();
       
-      if (fileType.startsWith('image/') || fileType === 'application/pdf') {
-        const dataUri = await readFileAsDataURL(statementFile);
-        input = { statementMedia: dataUri };
-      } else if (fileType === 'text/csv') {
+      if (fileType === 'text/html' || fileName.endsWith('.html')) {
         const text = await readFileAsText(statementFile);
         input = { statementText: text };
-      } else if (fileType.includes('sheet') || fileType.includes('excel')) {
+      } else if (fileType === 'text/csv' || fileName.endsWith('.csv')) {
+        const text = await readFileAsText(statementFile);
+        input = { statementText: text };
+      } else if (fileType.includes('sheet') || fileType.includes('excel') || fileName.endsWith('.xls') || fileName.endsWith('.xlsx')) {
         const text = await handleExcelFile(statementFile);
         input = { statementText: text };
+      } else if (fileType.startsWith('image/') || fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
+        const dataUri = await readFileAsDataURL(statementFile);
+        input = { statementMedia: dataUri };
       } else {
+        // As a fallback for unknown types, try reading as text.
+        try {
+          const text = await readFileAsText(statementFile);
+          input = { statementText: text };
+        } catch (e) {
           throw new Error('Unsupported file type for processing.');
+        }
       }
       
       const extractedTransactions = await extractBankStatementData(input);
@@ -164,7 +177,7 @@ export function StatementProcessor() {
                 Drag & drop your statement file here
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Supports PDF, CSV, XLS, XLSX, JPG, PNG
+                Supports PDF, CSV, XLS, XLSX, JPG, PNG, HTML
               </p>
             </>
           )}
@@ -172,7 +185,7 @@ export function StatementProcessor() {
                 ref={fileInputRef}
                 type="file"
                 className="hidden"
-                accept={ACCEPTED_FILE_TYPES.join(',')}
+                accept={ACCEPTED_FILE_TYPES.join(',') + ',.html,.htm,.pdf,.xls,.xlsx,.csv'}
                 onChange={handleFileSelect}
                 disabled={isProcessing}
             />
