@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Sidebar,
@@ -29,15 +30,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     </SidebarHeader>
                     <SidebarMenu>
                         <SidebarMenuItem>
-                            <SidebarMenuButton href="/dashboard" isActive={pathname.startsWith('/dashboard')}>
-                                <LayoutDashboard />
-                                <span>Dashboard</span>
+                            <SidebarMenuButton asChild isActive={pathname.startsWith('/dashboard')}>
+                                <Link href="/dashboard">
+                                    <LayoutDashboard />
+                                    <span>Dashboard</span>
+                                </Link>
                             </SidebarMenuButton>
                         </SidebarMenuItem>
                         <SidebarMenuItem>
-                            <SidebarMenuButton href="/reports" isActive={pathname.startsWith('/reports')}>
-                                <FileText />
-                                <span>Reports</span>
+                            <SidebarMenuButton asChild isActive={pathname.startsWith('/reports')}>
+                                <Link href="/reports">
+                                    <FileText />
+                                    <span>Reports</span>
+                                </Link>
                             </SidebarMenuButton>
                         </SidebarMenuItem>
                     </SidebarMenu>
