@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Download, FileText, AlertCircle, CheckCircle } from 'lucide-react';
+import { Download, FileText, AlertCircle, CheckCircle, ListChecks } from 'lucide-react';
 
 import type { UnifiedExpense } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -193,6 +193,23 @@ export function FbrComplianceReport({ expenses }: FbrComplianceReportProps) {
                 </AlertDescription>
               </Alert>
             </div>
+            <Card>
+                <CardHeader className="flex flex-row items-center gap-4 space-y-0">
+                    <ListChecks className="h-6 w-6" />
+                    <div >
+                        <CardTitle>Documentation Checklist</CardTitle>
+                        <CardDescription>A reminder of the proof you'll need for tax deductions.</CardDescription>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <ul className="space-y-2 text-sm list-disc pl-5 text-muted-foreground">
+                        {medicalExpenses > 0 && <li><strong>Medical Expenses:</strong> Keep all original receipts and prescriptions from registered medical practitioners.</li>}
+                        {educationExpenses > 0 && <li><strong>Education Expenses:</strong> Retain fee challans, bank deposit slips, and the National Tax Number (NTN) of the educational institution.</li>}
+                        {charitableDonations > 0 && <li><strong>Charitable Donations:</strong> You must have a tax exemption certificate from the approved charitable organization for the relevant tax year.</li>}
+                        <li><strong>General Expenses:</strong> For all business-related claims, ensure you have original invoices and proof of payment (e.g., bank transaction records).</li>
+                    </ul>
+                </CardContent>
+            </Card>
           </div>
         )}
       </CardContent>

@@ -13,7 +13,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { Calendar } from './ui/calendar';
-import { ChevronDown, Calendar as CalendarIcon } from 'lucide-react';
+import { ChevronDown, Calendar as CalendarIcon, FileCheck, Percent, ShieldCheck } from 'lucide-react';
 import { ExpenseListView } from './expense-list-view';
 import type { DateRange } from 'react-day-picker';
 import { format, parseISO, startOfWeek, startOfMonth, isValid, addDays } from 'date-fns';
@@ -94,9 +94,13 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
       
       let inDateRange = true;
       if (dateRange?.from) {
-        const fromDate = dateRange.from;
-        const toDate = dateRange.to ? addDays(dateRange.to, 1) : addDays(fromDate, 1);
-        inDateRange = expenseDate >= fromDate && expenseDate < toDate;
+        let toDate;
+        if (dateRange.to) {
+          toDate = addDays(dateRange.to, 1);
+        } else {
+          toDate = addDays(dateRange.from, 1);
+        }
+        inDateRange = expenseDate >= dateRange.from && expenseDate < toDate;
       }
 
       return inCategory && inAmountRange && inDateRange;
@@ -122,26 +126,45 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
         return acc;
     }, {} as Record<string, number>);
 
-    const { businessExpenses, personalExpenses } = filteredExpenses.reduce((acc, f) => {
+    const { businessExpenses, personalExpenses, deductibleExpenses } = filteredExpenses.reduce((acc, f) => {
         if (f.category === 'Business Expenses') {
             acc.businessExpenses += f.amount;
         } else {
             acc.personalExpenses += f.amount;
         }
+        if (['Medical', 'Education', 'Charitable Donations'].includes(f.category)) {
+            acc.deductibleExpenses += f.amount;
+        }
         return acc;
-    }, { businessExpenses: 0, personalExpenses: 0 });
+    }, { businessExpenses: 0, personalExpenses: 0, deductibleExpenses: 0 });
     
     const totalIncome = transactions
         .filter(tx => {
+            if (!tx.credit) return false;
             const txDate = parseISO(tx.date);
-            if (!isValid(txDate) || !tx.credit) return false;
+            if (!isValid(txDate)) return false;
 
             if (!dateRange || !dateRange.from) return true;
-            const fromDate = dateRange.from;
-            const toDate = dateRange.to ? addDays(dateRange.to, 1) : addDays(fromDate, 1);
-            return txDate >= fromDate && txDate < toDate;
+            let toDate;
+            if (dateRange.to) {
+              toDate = addDays(dateRange.to, 1);
+            } else {
+              toDate = addDays(dateRange.from, 1);
+            }
+            return txDate >= dateRange.from && txDate < toDate;
         })
         .reduce((sum, tx) => sum + (tx.credit || 0), 0);
+
+    const processingStats = acceptedFiles.reduce((acc, f) => {
+        if (f.status === 'accepted' || f.status === 'success') {
+            acc.processed++;
+            acc.totalConfidence += f.extractedData?.confidence_score || 0;
+        } else if (f.status === 'error') {
+            acc.processed++;
+        }
+        return acc;
+    }, { processed: 0, successful: acceptedFiles.filter(f => f.status === 'accepted' || f.status === 'success').length, totalConfidence: 0 });
+
 
     return {
       totalExpenses,
@@ -149,8 +172,10 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
       businessExpenses,
       personalExpenses,
       totalIncome,
+      deductibleExpenses,
+      processingStats,
     };
-  }, [filteredExpenses, transactions, dateRange]);
+  }, [filteredExpenses, transactions, dateRange, acceptedFiles]);
 
   const chartData = useMemo(() => {
     return Object.entries(summary.categorySummary)
@@ -165,7 +190,13 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
   const timelineData = useMemo(() => {
     let groupedData: { [key: string]: number } = {};
     
-    const validFilteredExpenses = filteredExpenses.filter(f => isValid(parseISO(f.date)));
+    const validFilteredExpenses = filteredExpenses.filter(f => {
+        try {
+            return isValid(parseISO(f.date));
+        } catch {
+            return false;
+        }
+    });
 
     if (timelinePeriod === 'daily') {
         validFilteredExpenses.forEach(f => {
@@ -185,11 +216,11 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
     }
 
     return Object.entries(groupedData)
-        .map(([date, total]) => ({ date, total }))
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .map(([date, total]) => ({ date: parseISO(date), total }))
+        .sort((a, b) => a.date.getTime() - b.date.getTime())
         .map(item => ({
-            ...item, 
-            date: format(parseISO(item.date), timelinePeriod === 'daily' ? 'MMM d' : (timelinePeriod === 'weekly' ? 'MMM d' : 'MMM yyyy'))
+            total: item.total,
+            date: format(item.date, timelinePeriod === 'daily' ? 'MMM d' : (timelinePeriod === 'weekly' ? 'MMM d' : 'MMM yyyy'))
         }));
 
   }, [filteredExpenses, timelinePeriod]);
@@ -354,6 +385,45 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
           <CardContent>
             <p className="text-3xl font-bold">{summary.businessExpenses.toLocaleString()} <span className="text-lg font-normal text-muted-foreground">PKR</span></p>
           </CardContent>
+        </Card>
+
+        <Card className="md:col-span-2">
+            <CardHeader>
+                <CardTitle>Tax Summary</CardTitle>
+                <CardDescription>Potentially deductible expenses from your filtered data.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <p className="text-3xl font-bold">{summary.deductibleExpenses.toLocaleString()} <span className="text-lg font-normal text-muted-foreground">PKR</span></p>
+                <p className="text-xs text-muted-foreground mt-1">From Medical, Education & Charitable Donations categories.</p>
+            </CardContent>
+        </Card>
+
+        <Card className="md:col-span-2">
+            <CardHeader>
+                <CardTitle>Receipt Processing Stats</CardTitle>
+                <CardDescription>Performance of AI data extraction for this session.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                    <FileCheck className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-2xl font-bold">{summary.processingStats.processed}</p>
+                    <p className="text-xs text-muted-foreground">Total Processed</p>
+                </div>
+                <div>
+                    <Percent className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-2xl font-bold">
+                        {summary.processingStats.processed > 0 ? ((summary.processingStats.successful / summary.processingStats.processed) * 100).toFixed(0) : 0}%
+                    </p>
+                    <p className="text-xs text-muted-foreground">Success Rate</p>
+                </div>
+                 <div>
+                    <ShieldCheck className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-2xl font-bold">
+                         {summary.processingStats.successful > 0 ? ((summary.processingStats.totalConfidence / summary.processingStats.successful) * 100).toFixed(0) : 0}%
+                    </p>
+                    <p className="text-xs text-muted-foreground">Avg. Confidence</p>
+                </div>
+            </CardContent>
         </Card>
         
         <div className="md:col-span-4">
