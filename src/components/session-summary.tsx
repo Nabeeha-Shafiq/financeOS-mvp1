@@ -16,7 +16,7 @@ import { Calendar } from './ui/calendar';
 import { ChevronDown, Calendar as CalendarIcon } from 'lucide-react';
 import { FbrReportGenerator } from './fbr-report-generator';
 import { ExpenseListView } from './expense-list-view';
-import { DateRange } from 'react-day-picker';
+import type { DateRange } from 'react-day-picker';
 import { format, subDays, startOfWeek, parseISO, startOfMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
 
