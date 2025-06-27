@@ -31,7 +31,7 @@ const BankTransactionSchema = z.object({
   debit: z.number().optional().describe('The transaction amount if it is a debit/withdrawal. Should be a positive number.'),
   credit: z.number().optional().describe('The transaction amount if it is a credit/deposit. Should be a positive number.'),
   balance: z.number().optional().describe('The remaining balance after the transaction.'),
-  category: z.string().optional().describe(`The suggested expense category. Choose one of the following: ${CATEGORIES.join(', ')}. If it's a credit/deposit or doesn't fit a category, label it 'Other'.`),
+  category: z.string().optional().describe(`The suggested expense category. Choose one from the list. For debits, a category must be assigned. For credits/deposits or ATM withdrawals, label it 'Other'.`),
 });
 export type BankTransaction = z.infer<typeof BankTransactionSchema>;
 
@@ -64,7 +64,7 @@ const prompt = ai.definePrompt({
   - debit: The withdrawal amount. If not applicable, omit this field.
   - credit: The deposit amount. If not applicable, omit this field.
   - balance: The balance after the transaction. If not available, omit this field.
-  - category: Based on the transaction description, suggest the most relevant expense category. You must choose one from this list: ${CATEGORIES.join(', ')}. Recognize common Pakistani merchants (e.g., 'PTCL', 'K-Electric' are 'Utilities', 'PSO' is 'Fuel & Transportation'). If it is a credit or deposit, or if no category fits, use 'Other'.
+  - category: Based on the transaction description, suggest the most relevant expense category. You must choose one from this list: ${CATEGORIES.join(', ')}. If it's a debit/withdrawal, you MUST assign a category. Analyze the merchant name and transaction details carefully to find the best fit. Recognize common Pakistani merchants and services (e.g., 'PTCL', 'K-Electric', 'SNGPL' map to 'Utilities'; 'PSO', 'Total PARCO' to 'Fuel & Transportation'; 'Foodpanda', 'Cheetay' to 'Food & Groceries'; 'Daraz', 'Alkaram' to 'Personal Care' or 'Entertainment'). If the transaction is a credit/deposit, or if it is an ATM cash withdrawal, label it as 'Other'.
 
   Return the data as a JSON object with a single key "transactions" containing an array of the extracted transaction objects.
 
