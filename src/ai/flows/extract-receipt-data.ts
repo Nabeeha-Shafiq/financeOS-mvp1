@@ -39,7 +39,7 @@ const ExtractReceiptDataOutputSchema = z.object({
   amount: z.number().describe('The total amount on the receipt, in PKR.'),
   date: z.string().describe('The date on the receipt in YYYY-MM-DD format.'),
   items: z.array(z.string()).describe('The list of individual items purchased.'),
-  location: z.string().optional().describe('The address of the merchant, if available.'),
+  location: z.string().optional().describe('The address of the merchant, if it is present on the receipt. If not available, return an empty string.'),
   category: z.string().describe(`The suggested expense category. Choose one of the following: ${CATEGORIES.join(', ')}.`),
   confidence_score: z.number().describe('A score from 0 to 1 indicating the confidence in the extracted data.'),
   detected_language: z.string().describe('The detected language of the receipt (e.g., "English", "Urdu").'),
@@ -59,7 +59,7 @@ const prompt = ai.definePrompt({
   prompt: `You are an expert OCR and data extraction agent specializing in financial documents. Analyze the provided receipt image, which may contain text in English or Urdu.
   Extract the following information and return it as a structured JSON object.
 
-  - merchant_name: The name of the business or store.
+  - merchant_name: The name of the business or store. If the merchant name cannot be determined, you MUST use the value "None Found".
   - amount: The total amount of the transaction. The currency is Pakistani Rupee (PKR).
   - date: The date of the transaction in YYYY-MM-DD format.
   - items: An array of strings, where each string is an individual item purchased. If an item is in Urdu, transliterate it to Roman Urdu. For example, "دال" should become "Daal", not "Pulses", and "دودھ" should become "Doodh", not "Milk". Do not translate the item names to English.
