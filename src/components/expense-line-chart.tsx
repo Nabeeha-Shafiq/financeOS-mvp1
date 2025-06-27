@@ -67,7 +67,6 @@ export function ExpenseLineChart({ data }: ExpenseLineChartProps) {
               tickLine={false}
               axisLine={false}
               tickMargin={8}
-              tickFormatter={(value) => value.slice(0, 3)}
             />
             <ChartTooltip
               cursor={false}

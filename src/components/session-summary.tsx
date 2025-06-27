@@ -17,7 +17,7 @@ import { ChevronDown, Calendar as CalendarIcon } from 'lucide-react';
 import { FbrReportGenerator } from './fbr-report-generator';
 import { ExpenseListView } from './expense-list-view';
 import { DateRange } from 'react-day-picker';
-import { format, subDays, startOfWeek, endOfWeek, parseISO, startOfMonth, endOfMonth } from 'date-fns';
+import { format, subDays, startOfWeek, parseISO, startOfMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 
@@ -139,7 +139,7 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
     return Object.entries(groupedData)
         .map(([date, total]) => ({ date, total }))
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-        .map(item => ({...item, date: format(new Date(item.date), timelinePeriod === 'daily' ? 'MMM d' : 'MMM')}));
+        .map(item => ({...item, date: format(new Date(item.date), timelinePeriod === 'daily' ? 'MMM d' : (timelinePeriod === 'weekly' ? 'MMM d' : 'MMM yyyy'))}));
 
   }, [filteredReceipts, timelinePeriod]);
 
@@ -180,6 +180,21 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
                         </DropdownMenuTrigger>
                         <DropdownMenuContent className="w-56">
                             <DropdownMenuLabel>Filter by Category</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuCheckboxItem
+                                checked={selectedCategories.length === allCategories.length}
+                                onCheckedChange={() => setSelectedCategories(allCategories)}
+                                onSelect={(e) => e.preventDefault()}
+                            >
+                                All Categories
+                            </DropdownMenuCheckboxItem>
+                             <DropdownMenuCheckboxItem
+                                checked={selectedCategories.length === 0}
+                                onCheckedChange={() => setSelectedCategories([])}
+                                onSelect={(e) => e.preventDefault()}
+                            >
+                                None
+                            </DropdownMenuCheckboxItem>
                             <DropdownMenuSeparator />
                             {allCategories.map(category => (
                                 <DropdownMenuCheckboxItem
