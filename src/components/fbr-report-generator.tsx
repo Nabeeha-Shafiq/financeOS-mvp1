@@ -5,7 +5,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Download, FileText, AlertCircle, CheckCircle } from 'lucide-react';
 
-import type { FileWrapper } from '@/types';
+import type { UnifiedExpense } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,23 +18,23 @@ const MEDICAL_DEDUCTION_RATE = 0.10;
 const EDUCATION_DEDUCTION_INCOME_LIMIT = 1500000;
 
 interface FbrReportGeneratorProps {
-  acceptedFiles: FileWrapper[];
+  expenses: UnifiedExpense[];
 }
 
-export function FbrReportGenerator({ acceptedFiles }: FbrReportGeneratorProps) {
+export function FbrReportGenerator({ expenses }: FbrReportGeneratorProps) {
   const [annualIncome, setAnnualIncome] = useState<number | ''>('');
 
   const { medicalExpenses, educationExpenses } = useMemo(() => {
     let med = 0;
     let edu = 0;
-    acceptedFiles.forEach(f => {
-      const category = f.extractedData?.category;
-      const amount = f.extractedData?.amount || 0;
+    expenses.forEach(f => {
+      const category = f.category;
+      const amount = f.amount || 0;
       if (category === 'Medical') med += amount;
       if (category === 'Education') edu += amount;
     });
     return { medicalExpenses: med, educationExpenses: edu };
-  }, [acceptedFiles]);
+  }, [expenses]);
 
   const medicalDeductionLimit = useMemo(() => {
     return typeof annualIncome === 'number' ? annualIncome * MEDICAL_DEDUCTION_RATE : 0;
@@ -49,21 +49,24 @@ export function FbrReportGenerator({ acceptedFiles }: FbrReportGeneratorProps) {
 
     const headers = ['Date', 'Description', 'Category', 'Amount', 'Deductible', 'Source', 'Confidence Score', 'Receipt Available'];
     
-    const rows = acceptedFiles.map(f => {
-        const data = f.extractedData!;
+    const rows = expenses.map(expense => {
         const isDeductible = 
-            (data.category === 'Medical' && data.amount <= medicalDeductionLimit) || 
-            (data.category === 'Education' && isEligibleForEducationDeduction);
+            (expense.category === 'Medical' && expense.amount <= medicalDeductionLimit) || 
+            (expense.category === 'Education' && isEligibleForEducationDeduction);
+        
+        const sourceText = expense.source === 'bank' ? 'Bank Statement' : (expense.isManual ? 'Manual Entry' : 'Receipt Scan');
+        const confidenceText = expense.source === 'receipt' ? `${(expense.confidence_score * 100).toFixed(0)}%` : '100%';
+        const receiptAvailable = expense.source === 'receipt' ? 'Yes' : 'No';
 
         return [
-            data.date,
-            `"${data.merchant_name}"`,
-            data.category,
-            data.amount,
+            expense.date,
+            `"${expense.merchant_name}"`,
+            expense.category,
+            expense.amount,
             isDeductible ? 'Yes' : 'No',
-            data.isManual ? 'Manual Entry' : 'Receipt Scan',
-            data.isManual ? '100%' : `${(data.confidence_score * 100).toFixed(0)}%`,
-            data.isManual ? 'No' : 'Yes',
+            sourceText,
+            confidenceText,
+            receiptAvailable,
         ].join(',');
     });
 
@@ -106,19 +109,20 @@ export function FbrReportGenerator({ acceptedFiles }: FbrReportGeneratorProps) {
     const tableColumn = ['Date', 'Description', 'Category', 'Amount (PKR)', 'Deductible', 'Source'];
     const tableRows: (string|number)[][] = [];
 
-    acceptedFiles.forEach(f => {
-        const data = f.extractedData!;
+    expenses.forEach(expense => {
         const isDeductible = 
-            (data.category === 'Medical' && data.amount <= medicalDeductionLimit) || 
-            (data.category === 'Education' && isEligibleForEducationDeduction);
+            (expense.category === 'Medical' && expense.amount <= medicalDeductionLimit) || 
+            (expense.category === 'Education' && isEligibleForEducationDeduction);
             
+        const sourceText = expense.source === 'bank' ? 'Bank' : (expense.isManual ? 'Manual' : 'Receipt');
+
         const row = [
-            data.date,
-            data.merchant_name,
-            data.category,
-            data.amount.toLocaleString(),
+            expense.date,
+            expense.merchant_name,
+            expense.category,
+            expense.amount.toLocaleString(),
             isDeductible ? 'Yes' : 'No',
-            data.isManual ? 'Manual' : 'Receipt'
+            sourceText
         ];
         tableRows.push(row);
     });

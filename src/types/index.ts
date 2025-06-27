@@ -20,3 +20,8 @@ export interface ProcessedBankTransaction extends BankTransaction {
     matchStatus: 'unmatched' | 'matched' | 'manual';
     matchedReceiptId?: string;
 }
+
+export interface UnifiedExpense extends ExtractReceiptDataOutput {
+  id: string;
+  source: 'receipt' | 'manual' | 'bank';
+}
