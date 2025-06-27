@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { readFileAsDataURL, readFileAsText, handleExcelFile } from '@/lib/utils';
 import { extractBankStatementData, type BankTransaction } from '@/ai/flows/extract-bank-statement-data';
+import type { ProcessedBankTransaction, FileWrapper } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -18,9 +19,22 @@ const ACCEPTED_FILE_TYPES = [
   'text/html'
 ];
 
-export function StatementProcessor() {
+interface StatementProcessorProps {
+    onTransactionsExtracted: (transactions: BankTransaction[]) => void;
+    transactions: ProcessedBankTransaction[];
+    receipts: FileWrapper[];
+    onUpdateTransaction: (updatedTransaction: ProcessedBankTransaction) => void;
+    onManualMatch: (transactionId: string, receiptId: string) => void;
+}
+
+export function StatementProcessor({ 
+    onTransactionsExtracted, 
+    transactions,
+    receipts,
+    onUpdateTransaction,
+    onManualMatch
+}: StatementProcessorProps) {
   const [statementFile, setStatementFile] = useState<File | null>(null);
-  const [transactions, setTransactions] = useState<BankTransaction[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -46,8 +60,8 @@ export function StatementProcessor() {
       return;
     }
     setStatementFile(file);
-    setTransactions([]);
-  }, [toast]);
+    onTransactionsExtracted([]);
+  }, [toast, onTransactionsExtracted]);
   
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -97,13 +111,18 @@ export function StatementProcessor() {
     }
     
     setIsProcessing(true);
-    setTransactions([]);
 
     try {
       let input: { statementMedia?: string; statementText?: string } = {};
       const fileType = statementFile.type;
       const fileName = statementFile.name.toLowerCase();
       
+      const isHtmlLike = async (file: File) => {
+        const text = await readFileAsText(file);
+        const trimmedContent = text.trim().toLowerCase();
+        return trimmedContent.startsWith('<!doctype html') || trimmedContent.startsWith('<html>');
+      };
+
       if (fileType === 'text/html' || fileName.endsWith('.html')) {
         const text = await readFileAsText(statementFile);
         input = { statementText: text };
@@ -117,14 +136,12 @@ export function StatementProcessor() {
         const dataUri = await readFileAsDataURL(statementFile);
         input = { statementMedia: dataUri };
       } else if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
-        const fileContentAsText = await readFileAsText(statementFile);
-        const trimmedContent = fileContentAsText.trim().toLowerCase();
-        
-        if (trimmedContent.startsWith('<!doctype html') || trimmedContent.startsWith('<html>')) {
-          input = { statementText: fileContentAsText };
+        if (await isHtmlLike(statementFile)) {
+            const text = await readFileAsText(statementFile);
+            input = { statementText: text };
         } else {
-          const dataUri = await readFileAsDataURL(statementFile);
-          input = { statementMedia: dataUri };
+            const dataUri = await readFileAsDataURL(statementFile);
+            input = { statementMedia: dataUri };
         }
       } else {
         try {
@@ -134,13 +151,14 @@ export function StatementProcessor() {
           throw new Error('Unsupported file type for processing.');
         }
       }
-
+      
       if (!input.statementMedia && !input.statementText) {
         throw new Error('Could not prepare the file for processing. It may be an unsupported format.');
       }
       
       const extractedTransactions = await extractBankStatementData(input);
-      setTransactions(extractedTransactions);
+      onTransactionsExtracted(extractedTransactions);
+
       toast({
         title: 'Processing Complete',
         description: `Extracted ${extractedTransactions.length} transactions from your statement.`,
@@ -163,7 +181,7 @@ export function StatementProcessor() {
     <Card className="md:col-span-4 mt-8">
       <CardHeader>
         <CardTitle>Bank Statement Processing</CardTitle>
-        <CardDescription>Upload a bank statement to extract transactions.</CardDescription>
+        <CardDescription>Upload a bank statement to extract and categorize transactions. The system will attempt to automatically match them to your uploaded receipts.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div
@@ -222,7 +240,12 @@ export function StatementProcessor() {
         )}
 
         {transactions.length > 0 && (
-            <TransactionList transactions={transactions} />
+            <TransactionList 
+                transactions={transactions} 
+                receipts={receipts}
+                onUpdateTransaction={onUpdateTransaction}
+                onManualMatch={onManualMatch}
+            />
         )}
       </CardContent>
     </Card>

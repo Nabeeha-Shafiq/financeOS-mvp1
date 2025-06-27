@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { ReceiptDropzone } from '@/components/receipt-dropzone';
 import { FilePreviewGrid } from '@/components/file-preview-grid';
 import { Button } from '@/components/ui/button';
@@ -8,12 +8,13 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { extractReceiptData } from '@/ai/flows/extract-receipt-data';
 import { readFileAsDataURL, compressImage, handleZipFile, convertHeic } from '@/lib/utils';
-import type { FileWrapper, ExtractReceiptDataOutput } from '@/types';
+import type { FileWrapper, ExtractReceiptDataOutput, BankTransaction, ProcessedBankTransaction } from '@/types';
 import { Bot, Sparkles, PlusCircle } from 'lucide-react';
 import { SessionSummary } from '@/components/session-summary';
 import { ManualExpenseForm } from '@/components/manual-expense-form';
 import { StatementProcessor } from '@/components/statement-processor';
 import { Separator } from '@/components/ui/separator';
+import { differenceInDays } from 'date-fns';
 
 const MAX_FILES = 100;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -44,6 +45,7 @@ export default function Home() {
   const [files, setFiles] = useState<FileWrapper[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState({ processed: 0, total: 0 });
+  const [transactions, setTransactions] = useState<ProcessedBankTransaction[]>([]);
   const { toast } = useToast();
 
   const addFileToState = useCallback((file: File, currentFiles: FileWrapper[]) => {
@@ -166,6 +168,15 @@ export default function Home() {
         description: `Your expense has been successfully logged.`
     })
   }, [toast]);
+  
+  const handleTransactionsExtracted = (extractedTxs: BankTransaction[]) => {
+      const processed = extractedTxs.map((tx, index) => ({
+          ...tx,
+          id: `tx-${Date.now()}-${index}`,
+          matchStatus: 'unmatched' as const,
+      }));
+      setTransactions(processed);
+  };
 
   const handleProcessReceipts = async () => {
     const filesToProcess = files.filter(f => f.status === 'queued');
@@ -209,6 +220,65 @@ export default function Home() {
   const queuedFilesCount = files.filter(f => f.status === 'queued').length;
   const needsVerificationCount = files.filter(f => f.status === 'success').length;
   const acceptedFiles = useMemo(() => files.filter(f => f.status === 'accepted'), [files]);
+
+  useEffect(() => {
+    const unmatchedTxs = transactions.filter(t => t.matchStatus === 'unmatched');
+    const unmatchedReceipts = files.filter(f => f.status === 'accepted' && !f.matchedTransactionId);
+
+    if (unmatchedTxs.length === 0 || unmatchedReceipts.length === 0) {
+        return;
+    }
+
+    let matchedReceiptIds = new Set<string>();
+    const newTransactions = [...transactions];
+    const newFiles = [...files];
+
+    unmatchedTxs.forEach(tx => {
+        if (tx.matchStatus !== 'unmatched') return;
+
+        const availableReceipts = unmatchedReceipts.filter(r => !matchedReceiptIds.has(r.id));
+        
+        for (const receipt of availableReceipts) {
+            const receiptData = receipt.extractedData!;
+            const txAmount = tx.debit || tx.credit || 0;
+            
+            const isAmountMatch = Math.abs(receiptData.amount - txAmount) < 1;
+            const isDateMatch = Math.abs(differenceInDays(new Date(tx.date), new Date(receiptData.date))) <= 1;
+
+            if (isAmountMatch && isDateMatch) {
+                matchedReceiptIds.add(receipt.id);
+                
+                const txIndex = newTransactions.findIndex(t => t.id === tx.id);
+                if (txIndex > -1) {
+                    newTransactions[txIndex] = { ...newTransactions[txIndex], matchStatus: 'matched', matchedReceiptId: receipt.id };
+                }
+
+                const fileIndex = newFiles.findIndex(f => f.id === receipt.id);
+                if (fileIndex > -1) {
+                    newFiles[fileIndex] = { ...newFiles[fileIndex], matchedTransactionId: tx.id };
+                }
+                break; // Move to the next transaction
+            }
+        }
+    });
+
+    if(matchedReceiptIds.size > 0) {
+        setTransactions(newTransactions);
+        setFiles(newFiles);
+        toast({ title: 'Auto-Matched!', description: `Found ${matchedReceiptIds.size} matches between receipts and transactions.`});
+    }
+
+  }, [transactions, files, toast]);
+
+  const handleUpdateTransaction = useCallback((updatedTx: ProcessedBankTransaction) => {
+    setTransactions(prev => prev.map(tx => tx.id === updatedTx.id ? updatedTx : tx));
+  }, []);
+
+  const handleManualMatch = useCallback((transactionId: string, receiptId: string) => {
+    setTransactions(prev => prev.map(tx => tx.id === transactionId ? { ...tx, matchStatus: 'manual', matchedReceiptId: receiptId } : tx));
+    setFiles(prev => prev.map(f => f.id === receiptId ? { ...f, matchedTransactionId: transactionId } : f));
+    toast({ title: "Match Successful", description: "Transaction and receipt have been manually linked."});
+  }, [toast]);
 
 
   return (
@@ -281,7 +351,13 @@ export default function Home() {
 
           <Separator className="my-12" />
 
-          <StatementProcessor />
+          <StatementProcessor 
+            onTransactionsExtracted={handleTransactionsExtracted}
+            transactions={transactions}
+            receipts={acceptedFiles}
+            onUpdateTransaction={handleUpdateTransaction}
+            onManualMatch={handleManualMatch}
+           />
 
         </div>
       </main>

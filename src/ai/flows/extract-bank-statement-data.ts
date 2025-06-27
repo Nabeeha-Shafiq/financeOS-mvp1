@@ -11,12 +11,27 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
+const CATEGORIES = [
+  'Medical',
+  'Education',
+  'Fuel & Transportation',
+  'Food & Groceries',
+  'Utilities',
+  'Rent & Housing',
+  'Business Expenses',
+  'Personal Care',
+  'Entertainment',
+  'Charitable Donations',
+  'Other',
+];
+
 const BankTransactionSchema = z.object({
   date: z.string().describe('The transaction date in YYYY-MM-DD format.'),
   description: z.string().describe('The detailed description of the transaction.'),
   debit: z.number().optional().describe('The transaction amount if it is a debit/withdrawal. Should be a positive number.'),
   credit: z.number().optional().describe('The transaction amount if it is a credit/deposit. Should be a positive number.'),
   balance: z.number().optional().describe('The remaining balance after the transaction.'),
+  category: z.string().optional().describe(`The suggested expense category. Choose one of the following: ${CATEGORIES.join(', ')}. If it's a credit/deposit or doesn't fit a category, label it 'Other'.`),
 });
 export type BankTransaction = z.infer<typeof BankTransactionSchema>;
 
@@ -49,6 +64,7 @@ const prompt = ai.definePrompt({
   - debit: The withdrawal amount. If not applicable, omit this field.
   - credit: The deposit amount. If not applicable, omit this field.
   - balance: The balance after the transaction. If not available, omit this field.
+  - category: Based on the transaction description, suggest the most relevant expense category. You must choose one from this list: ${CATEGORIES.join(', ')}. Recognize common Pakistani merchants (e.g., 'PTCL', 'K-Electric' are 'Utilities', 'PSO' is 'Fuel & Transportation'). If it is a credit or deposit, or if no category fits, use 'Other'.
 
   Return the data as a JSON object with a single key "transactions" containing an array of the extracted transaction objects.
 
