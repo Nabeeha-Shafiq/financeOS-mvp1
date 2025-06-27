@@ -14,10 +14,9 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { Calendar } from './ui/calendar';
 import { ChevronDown, Calendar as CalendarIcon } from 'lucide-react';
-import { FbrReportGenerator } from './fbr-report-generator';
 import { ExpenseListView } from './expense-list-view';
 import type { DateRange } from 'react-day-picker';
-import { format, subDays, startOfWeek, parseISO, startOfMonth, isValid } from 'date-fns';
+import { format, parseISO, startOfWeek, startOfMonth, isValid, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 
@@ -43,7 +42,7 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
     }));
 
     const bankExpenses: UnifiedExpense[] = transactions
-      .filter(tx => tx.matchStatus === 'unmatched' && tx.debit && tx.debit > 0)
+      .filter(tx => tx.matchStatus !== 'matched' && tx.debit && tx.debit > 0)
       .map(tx => ({
         id: tx.id,
         source: 'bank',
@@ -53,7 +52,7 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
         items: [tx.description],
         location: 'Bank Transaction',
         category: tx.category || 'Other',
-        confidence_score: 1, // Bank data is considered confident
+        confidence_score: 1, 
         detected_language: 'N/A',
         isManual: false,
       }));
@@ -86,17 +85,24 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
   
   const filteredExpenses = useMemo(() => {
     return unifiedExpenses.filter(f => {
-      const expenseDate = new Date(f.date);
+      const expenseDate = parseISO(f.date);
       if (!isValid(expenseDate)) {
         return false;
       }
       const inCategory = selectedCategories.length === 0 || selectedCategories.length === allCategories.length || selectedCategories.includes(f.category);
       const inAmountRange = f.amount >= amountRange[0] && f.amount <= amountRange[1];
-      const inDateRange = !dateRange || ((!dateRange.from || expenseDate >= dateRange.from) && (!dateRange.to || expenseDate <= dateRange.to));
+      
+      let inDateRange = true;
+      if (dateRange?.from) {
+        const fromDate = dateRange.from;
+        const toDate = dateRange.to ? addDays(dateRange.to, 1) : addDays(fromDate, 1);
+        inDateRange = expenseDate >= fromDate && expenseDate < toDate;
+      }
+
       return inCategory && inAmountRange && inDateRange;
     });
   }, [unifiedExpenses, selectedCategories, allCategories, amountRange, dateRange]);
-
+  
   const filteredReceipts = useMemo(() => {
     const filteredIds = new Set(filteredExpenses.map(e => e.id));
     return acceptedFiles.filter(f => filteredIds.has(f.id));
@@ -127,11 +133,13 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
     
     const totalIncome = transactions
         .filter(tx => {
-            const txDate = new Date(tx.date);
+            const txDate = parseISO(tx.date);
             if (!isValid(txDate) || !tx.credit) return false;
 
-            if (!dateRange) return true;
-            return (!dateRange.from || txDate >= dateRange.from) && (!dateRange.to || txDate <= dateRange.to);
+            if (!dateRange || !dateRange.from) return true;
+            const fromDate = dateRange.from;
+            const toDate = dateRange.to ? addDays(dateRange.to, 1) : addDays(fromDate, 1);
+            return txDate >= fromDate && txDate < toDate;
         })
         .reduce((sum, tx) => sum + (tx.credit || 0), 0);
 
@@ -181,7 +189,7 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
         .map(item => ({
             ...item, 
-            date: format(new Date(item.date), timelinePeriod === 'daily' ? 'MMM d' : (timelinePeriod === 'weekly' ? 'MMM d' : 'MMM yyyy'))
+            date: format(parseISO(item.date), timelinePeriod === 'daily' ? 'MMM d' : (timelinePeriod === 'weekly' ? 'MMM d' : 'MMM yyyy'))
         }));
 
   }, [filteredExpenses, timelinePeriod]);
@@ -201,7 +209,6 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {/* Filters */}
         <Card className="md:col-span-4">
             <CardHeader>
                 <CardTitle>Filters</CardTitle>
@@ -303,13 +310,15 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
                                 onSelect={setDateRange}
                                 numberOfMonths={2}
                             />
+                             <div className="p-2 border-t">
+                                <Button onClick={() => setDateRange(undefined)} variant="ghost" className="w-full justify-center">Clear</Button>
+                             </div>
                         </PopoverContent>
                     </Popover>
                 </div>
             </CardContent>
         </Card>
 
-        {/* Stats */}
         <Card>
           <CardHeader>
             <CardTitle>Total Income</CardTitle>
@@ -347,7 +356,6 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
           </CardContent>
         </Card>
         
-        {/* Timeline Chart */}
         <div className="md:col-span-4">
             <div className="flex justify-end mb-4">
                 <Tabs value={timelinePeriod} onValueChange={(value) => setTimelinePeriod(value as any)} className="w-auto">
@@ -361,7 +369,6 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
             <ExpenseLineChart data={timelineData} />
         </div>
         
-        {/* Pie and Bar Charts */}
         <div className="md:col-span-2">
             <ExpensePieChart data={chartData} />
         </div>
@@ -369,14 +376,8 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
             <ExpenseBarChart data={chartData} />
         </div>
         
-        {/* Expense List View */}
         <div className="md:col-span-4">
             <ExpenseListView expenses={filteredReceipts} transactions={transactions} />
-        </div>
-
-        {/* FBR Report Generator */}
-        <div className="md:col-span-4">
-            <FbrReportGenerator expenses={unifiedExpenses} />
         </div>
 
       </div>

@@ -1,6 +1,8 @@
 import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
+import { FinancialDataProvider } from '@/context/financial-data-context';
+import { SidebarProvider } from '@/components/ui/sidebar';
 
 export const metadata: Metadata = {
   title: 'FinanceOS Lite',
@@ -20,7 +22,11 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased">
-        {children}
+        <FinancialDataProvider>
+            <SidebarProvider>
+                {children}
+            </SidebarProvider>
+        </FinancialDataProvider>
         <Toaster />
       </body>
     </html>
