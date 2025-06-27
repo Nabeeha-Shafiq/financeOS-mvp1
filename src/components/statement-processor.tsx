@@ -117,20 +117,16 @@ export function StatementProcessor() {
         const dataUri = await readFileAsDataURL(statementFile);
         input = { statementMedia: dataUri };
       } else if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
-        // First, read the file as text to check if it's an HTML document saved as PDF
         const fileContentAsText = await readFileAsText(statementFile);
         const trimmedContent = fileContentAsText.trim().toLowerCase();
         
         if (trimmedContent.startsWith('<!doctype html') || trimmedContent.startsWith('<html>')) {
-          // This is an HTML file, not a real PDF. Process as text.
           input = { statementText: fileContentAsText };
         } else {
-          // This is likely a genuine PDF. Process as a media file.
           const dataUri = await readFileAsDataURL(statementFile);
           input = { statementMedia: dataUri };
         }
       } else {
-        // As a fallback for unknown types, try reading as text.
         try {
           const text = await readFileAsText(statementFile);
           input = { statementText: text };
@@ -156,7 +152,7 @@ export function StatementProcessor() {
       toast({
         variant: 'destructive',
         title: 'Processing Failed',
-        description: `Could not extract data from the statement. ${errorMessage}`,
+        description: `Could not extract data. ${errorMessage} If the file is password-protected, please save an unencrypted version (e.g., using 'Print to PDF') and try again.`,
       });
     } finally {
       setIsProcessing(false);
