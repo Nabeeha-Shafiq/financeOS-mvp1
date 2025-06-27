@@ -2,8 +2,6 @@ import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import imageCompression from 'browser-image-compression';
 import JSZip from 'jszip';
-import heic2any from 'heic2any';
-
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -72,6 +70,8 @@ export async function convertHeic(file: File): Promise<File> {
         return file;
     }
     try {
+        // Dynamically import heic2any to prevent SSR errors
+        const heic2any = (await import('heic2any')).default;
         const convertedBlob = await heic2any({
             blob: file,
             toType: "image/jpeg",
