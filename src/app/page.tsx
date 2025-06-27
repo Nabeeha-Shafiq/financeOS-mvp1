@@ -12,6 +12,8 @@ import type { FileWrapper, ExtractReceiptDataOutput } from '@/types';
 import { Bot, Sparkles, PlusCircle } from 'lucide-react';
 import { SessionSummary } from '@/components/session-summary';
 import { ManualExpenseForm } from '@/components/manual-expense-form';
+import { StatementProcessor } from '@/components/statement-processor';
+import { Separator } from '@/components/ui/separator';
 
 const MAX_FILES = 100;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -276,6 +278,11 @@ export default function Home() {
                 <p className="text-sm mt-4">Your data is processed in-session and is never stored on a server.</p>
              </div>
           )}
+
+          <Separator className="my-12" />
+
+          <StatementProcessor />
+
         </div>
       </main>
       <footer className="p-4 text-center text-sm text-muted-foreground border-t">
