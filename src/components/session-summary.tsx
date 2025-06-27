@@ -62,9 +62,12 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
   const filteredReceipts = useMemo(() => {
     return acceptedFiles.filter(f => {
       const data = f.extractedData!;
+      const receiptDate = new Date(data.date);
+      if (isNaN(receiptDate.getTime())) { // Check for invalid date
+        return false;
+      }
       const inCategory = selectedCategories.length === 0 || selectedCategories.length === allCategories.length || selectedCategories.includes(data.category);
       const inAmountRange = data.amount >= amountRange[0] && data.amount <= amountRange[1];
-      const receiptDate = new Date(data.date);
       const inDateRange = !dateRange || ((!dateRange.from || receiptDate >= dateRange.from) && (!dateRange.to || receiptDate <= dateRange.to));
       return inCategory && inAmountRange && inDateRange;
     });
@@ -149,8 +152,12 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
 
     return Object.entries(groupedData)
         .map(([date, total]) => ({ date, total }))
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-        .map(item => ({...item, date: format(new Date(item.date), timelinePeriod === 'daily' ? 'MMM d' : (timelinePeriod === 'weekly' ? 'MMM d' : 'MMM yyyy'))}));
+        .sort((a, b) => {
+            const dateA = new Date(a.date.length === 7 ? `${a.date}-01` : a.date);
+            const dateB = new Date(b.date.length === 7 ? `${b.date}-01` : b.date);
+            return dateA.getTime() - dateB.getTime();
+        })
+        .map(item => ({...item, date: format(new Date(item.date.length === 7 ? `${item.date}-01` : item.date), timelinePeriod === 'daily' ? 'MMM d' : (timelinePeriod === 'weekly' ? 'MMM d' : 'MMM yyyy'))}));
 
   }, [filteredReceipts, timelinePeriod]);
 
