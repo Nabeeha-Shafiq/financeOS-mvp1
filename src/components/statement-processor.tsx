@@ -100,7 +100,7 @@ export function StatementProcessor() {
     setTransactions([]);
 
     try {
-      let input = {};
+      let input: { statementMedia?: string; statementText?: string } = {};
       const fileType = statementFile.type;
       const fileName = statementFile.name.toLowerCase();
       
@@ -113,9 +113,22 @@ export function StatementProcessor() {
       } else if (fileType.includes('sheet') || fileType.includes('excel') || fileName.endsWith('.xls') || fileName.endsWith('.xlsx')) {
         const text = await handleExcelFile(statementFile);
         input = { statementText: text };
-      } else if (fileType.startsWith('image/') || fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
+      } else if (fileType.startsWith('image/')) {
         const dataUri = await readFileAsDataURL(statementFile);
         input = { statementMedia: dataUri };
+      } else if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
+        // First, read the file as text to check if it's an HTML document saved as PDF
+        const fileContentAsText = await readFileAsText(statementFile);
+        const trimmedContent = fileContentAsText.trim().toLowerCase();
+        
+        if (trimmedContent.startsWith('<!doctype html') || trimmedContent.startsWith('<html>')) {
+          // This is an HTML file, not a real PDF. Process as text.
+          input = { statementText: fileContentAsText };
+        } else {
+          // This is likely a genuine PDF. Process as a media file.
+          const dataUri = await readFileAsDataURL(statementFile);
+          input = { statementMedia: dataUri };
+        }
       } else {
         // As a fallback for unknown types, try reading as text.
         try {
@@ -124,6 +137,10 @@ export function StatementProcessor() {
         } catch (e) {
           throw new Error('Unsupported file type for processing.');
         }
+      }
+
+      if (!input.statementMedia && !input.statementText) {
+        throw new Error('Could not prepare the file for processing. It may be an unsupported format.');
       }
       
       const extractedTransactions = await extractBankStatementData(input);
