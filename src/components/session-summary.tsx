@@ -4,13 +4,22 @@ import { useState, useMemo } from 'react';
 import type { FileWrapper } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ExpensePieChart } from './expense-pie-chart';
+import { ExpenseBarChart } from './expense-bar-chart';
+import { ExpenseLineChart } from './expense-line-chart';
 import { Button } from './ui/button';
 import { Slider } from './ui/slider';
 import { Label } from './ui/label';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
-import { ChevronDown } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
+import { Calendar } from './ui/calendar';
+import { ChevronDown, Calendar as CalendarIcon } from 'lucide-react';
 import { FbrReportGenerator } from './fbr-report-generator';
 import { ExpenseListView } from './expense-list-view';
+import { DateRange } from 'react-day-picker';
+import { format, subDays, startOfWeek, endOfWeek, parseISO, startOfMonth, endOfMonth } from 'date-fns';
+import { cn } from '@/lib/utils';
+
 
 const FBR_DEDUCTIBLE_CATEGORIES = ['Medical', 'Education'];
 const CHART_COLORS = [
@@ -33,8 +42,13 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
 
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [amountRange, setAmountRange] = useState<[number, number]>([0, 0]);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 29),
+    to: new Date(),
+  });
+  const [timelinePeriod, setTimelinePeriod] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
 
-  // Update filters if the underlying data changes
+
   useMemo(() => {
     setSelectedCategories(allCategories);
   }, [allCategories]);
@@ -46,11 +60,13 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
   const filteredReceipts = useMemo(() => {
     return acceptedFiles.filter(f => {
       const data = f.extractedData!;
-      const inCategory = selectedCategories.length === 0 || selectedCategories.includes(data.category);
+      const inCategory = selectedCategories.length === 0 || selectedCategories.length === allCategories.length || selectedCategories.includes(data.category);
       const inAmountRange = data.amount >= amountRange[0] && data.amount <= amountRange[1];
-      return inCategory && inAmountRange;
+      const receiptDate = new Date(data.date);
+      const inDateRange = (!dateRange?.from || receiptDate >= dateRange.from) && (!dateRange?.to || receiptDate <= dateRange.to);
+      return inCategory && inAmountRange && inDateRange;
     });
-  }, [acceptedFiles, selectedCategories, amountRange]);
+  }, [acceptedFiles, selectedCategories, allCategories, amountRange, dateRange]);
 
   const summary = useMemo(() => {
     const totalExpenses = filteredReceipts.reduce((sum, f) => sum + f.extractedData!.amount, 0);
@@ -71,15 +87,26 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
         return acc;
     }, {} as Record<string, number>);
 
+    const { businessExpenses, personalExpenses } = filteredReceipts.reduce((acc, f) => {
+        if (f.extractedData?.category === 'Business Expenses') {
+            acc.businessExpenses += f.extractedData!.amount;
+        } else {
+            acc.personalExpenses += f.extractedData!.amount;
+        }
+        return acc;
+    }, { businessExpenses: 0, personalExpenses: 0 });
+
     return {
       totalExpenses,
       totalDeductible,
       categorySummary,
       processedCount: filteredReceipts.length,
+      businessExpenses,
+      personalExpenses,
     };
   }, [filteredReceipts]);
 
-  const pieChartData = useMemo(() => {
+  const chartData = useMemo(() => {
     return Object.entries(summary.categorySummary)
       .map(([category, total], index) => ({
         category,
@@ -88,6 +115,33 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
       }))
       .sort((a, b) => b.total - a.total);
   }, [summary.categorySummary]);
+
+  const timelineData = useMemo(() => {
+    let groupedData: { [key: string]: number } = {};
+
+    if (timelinePeriod === 'daily') {
+        filteredReceipts.forEach(f => {
+            const day = format(parseISO(f.extractedData!.date), 'yyyy-MM-dd');
+            groupedData[day] = (groupedData[day] || 0) + f.extractedData!.amount;
+        });
+    } else if (timelinePeriod === 'weekly') {
+        filteredReceipts.forEach(f => {
+            const weekStart = format(startOfWeek(parseISO(f.extractedData!.date)), 'yyyy-MM-dd');
+            groupedData[weekStart] = (groupedData[weekStart] || 0) + f.extractedData!.amount;
+        });
+    } else { // monthly
+        filteredReceipts.forEach(f => {
+            const monthStart = format(startOfMonth(parseISO(f.extractedData!.date)), 'yyyy-MM');
+            groupedData[monthStart] = (groupedData[monthStart] || 0) + f.extractedData!.amount;
+        });
+    }
+
+    return Object.entries(groupedData)
+        .map(([date, total]) => ({ date, total }))
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .map(item => ({...item, date: format(new Date(item.date), timelinePeriod === 'daily' ? 'MMM d' : 'MMM')}));
+
+  }, [filteredReceipts, timelinePeriod]);
 
   const handleCategoryToggle = (category: string) => {
     setSelectedCategories(prev =>
@@ -100,7 +154,7 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
   return (
     <section className="mt-12" aria-labelledby="summary-heading">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
-        <h2 id="summary-heading" className="text-2xl font-bold">Current Session Summary</h2>
+        <h2 id="summary-heading" className="text-2xl font-bold">Dashboard</h2>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -108,18 +162,16 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
         <Card className="md:col-span-4">
             <CardHeader>
                 <CardTitle>Filters</CardTitle>
-                <CardDescription>Refine the data shown in your summary.</CardDescription>
+                <CardDescription>Refine the data shown in your dashboard.</CardDescription>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
                 <div>
-                    <Label htmlFor="category-filter" className="mb-2 block">Category</Label>
+                    <Label className="mb-2 block">Category</Label>
                      <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="outline" className="w-full justify-between">
                             <span>
-                                {selectedCategories.length === 0 
-                                ? "Select categories" 
-                                : selectedCategories.length === allCategories.length
+                                {selectedCategories.length === 0 || selectedCategories.length === allCategories.length
                                 ? "All categories"
                                 : `${selectedCategories.length} selected`}
                             </span>
@@ -142,12 +194,11 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </div>
-                <div>
-                    <Label htmlFor="amount-range-slider" className="mb-2 block">
+                <div className="md:col-span-1">
+                    <Label className="mb-2 block">
                         Amount Range: {amountRange[0].toFixed(0)} - {amountRange[1].toFixed(0)} PKR
                     </Label>
                     <Slider
-                        id="amount-range-slider"
                         min={0}
                         max={maxAmount}
                         step={100}
@@ -155,6 +206,45 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
                         onValueChange={(value) => setAmountRange(value as [number, number])}
                         disabled={maxAmount === 0}
                     />
+                </div>
+                <div>
+                    <Label className="mb-2 block">Date Range</Label>
+                     <Popover>
+                        <PopoverTrigger asChild>
+                        <Button
+                            id="date"
+                            variant={"outline"}
+                            className={cn(
+                                "w-full justify-start text-left font-normal",
+                                !dateRange && "text-muted-foreground"
+                            )}
+                        >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {dateRange?.from ? (
+                            dateRange.to ? (
+                                <>
+                                {format(dateRange.from, "LLL dd, y")} -{" "}
+                                {format(dateRange.to, "LLL dd, y")}
+                                </>
+                            ) : (
+                                format(dateRange.from, "LLL dd, y")
+                            )
+                            ) : (
+                            <span>Pick a date</span>
+                            )}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                                initialFocus
+                                mode="range"
+                                defaultMonth={dateRange?.from}
+                                selected={dateRange}
+                                onSelect={setDateRange}
+                                numberOfMonths={2}
+                            />
+                        </PopoverContent>
+                    </Popover>
                 </div>
             </CardContent>
         </Card>
@@ -170,11 +260,18 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>FBR Tax Deductible</CardTitle>
+            <CardTitle>Personal Expenses</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">{summary.totalDeductible.toLocaleString()} <span className="text-lg font-normal text-muted-foreground">PKR</span></p>
-            <p className="text-xs text-muted-foreground mt-1">From Medical & Education</p>
+            <p className="text-3xl font-bold">{summary.personalExpenses.toLocaleString()} <span className="text-lg font-normal text-muted-foreground">PKR</span></p>
+          </CardContent>
+        </Card>
+         <Card>
+          <CardHeader>
+            <CardTitle>Business Expenses</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">{summary.businessExpenses.toLocaleString()} <span className="text-lg font-normal text-muted-foreground">PKR</span></p>
           </CardContent>
         </Card>
         <Card>
@@ -183,27 +280,30 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">{summary.processedCount}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Top Category</CardTitle>
-          </CardHeader>
-          <CardContent>
-             {pieChartData.length > 0 ? (
-                <>
-                <p className="text-xl font-bold">{pieChartData[0].category}</p>
-                <p className="text-md text-muted-foreground">{pieChartData[0].total.toLocaleString()} PKR</p>
-                </>
-             ) : (
-                <p className="text-md text-muted-foreground">No data</p>
-             )}
+             <p className="text-xs text-muted-foreground mt-1">in selected range</p>
           </CardContent>
         </Card>
         
-        {/* Chart */}
+        {/* Timeline Chart */}
         <div className="md:col-span-4">
-            <ExpensePieChart data={pieChartData} />
+            <div className="flex justify-end mb-4">
+                <Tabs value={timelinePeriod} onValueChange={(value) => setTimelinePeriod(value as any)} className="w-auto">
+                    <TabsList>
+                        <TabsTrigger value="daily">Daily</TabsTrigger>
+                        <TabsTrigger value="weekly">Weekly</TabsTrigger>
+                        <TabsTrigger value="monthly">Monthly</TabsTrigger>
+                    </TabsList>
+                </Tabs>
+            </div>
+            <ExpenseLineChart data={timelineData} />
+        </div>
+        
+        {/* Pie and Bar Charts */}
+        <div className="md:col-span-2">
+            <ExpensePieChart data={chartData} />
+        </div>
+        <div className="md:col-span-2">
+            <ExpenseBarChart data={chartData} />
         </div>
         
         {/* Expense List View */}
