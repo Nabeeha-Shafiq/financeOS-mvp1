@@ -11,7 +11,9 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Lightbulb } from 'lucide-react';
 
 export default function ReportsPage() {
-    const { acceptedFiles, transactions } = useFinancialData();
+    const { files, transactions } = useFinancialData();
+
+    const acceptedFiles = useMemo(() => files.filter(f => f.status === 'accepted'), [files]);
 
     const unifiedExpenses = useMemo<UnifiedExpense[]>(() => {
         const receiptExpenses: UnifiedExpense[] = acceptedFiles.map(f => ({
