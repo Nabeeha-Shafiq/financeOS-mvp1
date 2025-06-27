@@ -329,8 +329,8 @@ export default function Home() {
             </section>
           )}
 
-          {acceptedFiles.length > 0 && (
-            <SessionSummary acceptedFiles={acceptedFiles} />
+          {(acceptedFiles.length > 0 || transactions.length > 0) && (
+            <SessionSummary acceptedFiles={acceptedFiles} transactions={transactions} />
           )}
 
           {files.length === 0 && !isProcessing && (

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import type { FileWrapper } from '@/types';
+import type { FileWrapper, ProcessedBankTransaction } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ExpensePieChart } from './expense-pie-chart';
 import { ExpenseBarChart } from './expense-bar-chart';
@@ -30,7 +30,12 @@ const CHART_COLORS = [
   'hsl(var(--chart-5))',
 ];
 
-export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[] }) {
+interface SessionSummaryProps {
+  acceptedFiles: FileWrapper[];
+  transactions: ProcessedBankTransaction[];
+}
+
+export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryProps) {
   const allCategories = useMemo(() => {
     const categories = new Set(acceptedFiles.map(f => f.extractedData!.category));
     return Array.from(categories);
@@ -42,10 +47,7 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
 
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [amountRange, setAmountRange] = useState<[number, number]>([0, 0]);
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 29),
-    to: new Date(),
-  });
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [timelinePeriod, setTimelinePeriod] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
 
 
@@ -63,7 +65,7 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
       const inCategory = selectedCategories.length === 0 || selectedCategories.length === allCategories.length || selectedCategories.includes(data.category);
       const inAmountRange = data.amount >= amountRange[0] && data.amount <= amountRange[1];
       const receiptDate = new Date(data.date);
-      const inDateRange = (!dateRange?.from || receiptDate >= dateRange.from) && (!dateRange?.to || receiptDate <= dateRange.to);
+      const inDateRange = !dateRange || ((!dateRange.from || receiptDate >= dateRange.from) && (!dateRange.to || receiptDate <= dateRange.to));
       return inCategory && inAmountRange && inDateRange;
     });
   }, [acceptedFiles, selectedCategories, allCategories, amountRange, dateRange]);
@@ -95,6 +97,14 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
         }
         return acc;
     }, { businessExpenses: 0, personalExpenses: 0 });
+    
+    const totalIncome = transactions
+        .filter(tx => {
+            if (!dateRange) return true;
+            const txDate = new Date(tx.date);
+            return (!dateRange.from || txDate >= dateRange.from) && (!dateRange.to || txDate <= dateRange.to);
+        })
+        .reduce((sum, tx) => sum + (tx.credit || 0), 0);
 
     return {
       totalExpenses,
@@ -103,8 +113,9 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
       processedCount: filteredReceipts.length,
       businessExpenses,
       personalExpenses,
+      totalIncome,
     };
-  }, [filteredReceipts]);
+  }, [filteredReceipts, transactions, dateRange]);
 
   const chartData = useMemo(() => {
     return Object.entries(summary.categorySummary)
@@ -245,7 +256,7 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
                                 format(dateRange.from, "LLL dd, y")
                             )
                             ) : (
-                            <span>Pick a date</span>
+                            <span>All Time</span>
                             )}
                         </Button>
                         </PopoverTrigger>
@@ -265,6 +276,15 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
         </Card>
 
         {/* Stats */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Total Income</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">{summary.totalIncome.toLocaleString()} <span className="text-lg font-normal text-muted-foreground">PKR</span></p>
+             <p className="text-xs text-muted-foreground mt-1">from statement credits</p>
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle>Total Expenses</CardTitle>
@@ -287,15 +307,6 @@ export function SessionSummary({ acceptedFiles }: { acceptedFiles: FileWrapper[]
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">{summary.businessExpenses.toLocaleString()} <span className="text-lg font-normal text-muted-foreground">PKR</span></p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Receipts Processed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{summary.processedCount}</p>
-             <p className="text-xs text-muted-foreground mt-1">in selected range</p>
           </CardContent>
         </Card>
         
