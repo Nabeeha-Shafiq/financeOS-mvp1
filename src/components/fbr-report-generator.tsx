@@ -13,7 +13,6 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from './ui/separator';
 
-const FBR_DEDUCTIBLE_CATEGORIES = ['Medical', 'Education'];
 const MEDICAL_DEDUCTION_RATE = 0.10;
 const EDUCATION_DEDUCTION_INCOME_LIMIT = 1500000;
 
@@ -56,11 +55,11 @@ export function FbrReportGenerator({ expenses }: FbrReportGeneratorProps) {
         
         const sourceText = expense.source === 'bank' ? 'Bank Statement' : (expense.isManual ? 'Manual Entry' : 'Receipt Scan');
         const confidenceText = expense.source === 'receipt' ? `${(expense.confidence_score * 100).toFixed(0)}%` : '100%';
-        const receiptAvailable = expense.source === 'receipt' ? 'Yes' : 'No';
+        const receiptAvailable = expense.source !== 'bank' && expense.source !== 'manual' ? 'Yes' : 'No';
 
         return [
             expense.date,
-            `"${expense.merchant_name}"`,
+            `"${expense.merchant_name.replace(/"/g, '""')}"`,
             expense.category,
             expense.amount,
             isDeductible ? 'Yes' : 'No',
@@ -189,11 +188,11 @@ export function FbrReportGenerator({ expenses }: FbrReportGeneratorProps) {
       <CardFooter>
         <div className="flex gap-4">
             <Button onClick={handleExportCSV} disabled={isExportDisabled}>
-                <Download />
+                <Download className="mr-2 h-4 w-4" />
                 Export as CSV
             </Button>
             <Button onClick={handleExportPDF} disabled={isExportDisabled} variant="outline">
-                <FileText />
+                <FileText className="mr-2 h-4 w-4" />
                 Export as PDF
             </Button>
         </div>

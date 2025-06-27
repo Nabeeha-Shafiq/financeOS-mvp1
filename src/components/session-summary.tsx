@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { FileWrapper, ProcessedBankTransaction, UnifiedExpense } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ExpensePieChart } from './expense-pie-chart';
@@ -17,11 +17,10 @@ import { ChevronDown, Calendar as CalendarIcon } from 'lucide-react';
 import { FbrReportGenerator } from './fbr-report-generator';
 import { ExpenseListView } from './expense-list-view';
 import type { DateRange } from 'react-day-picker';
-import { format, subDays, startOfWeek, parseISO, startOfMonth } from 'date-fns';
+import { format, subDays, startOfWeek, parseISO, startOfMonth, isValid } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 
-const FBR_DEDUCTIBLE_CATEGORIES = ['Medical', 'Education'];
 const CHART_COLORS = [
   'hsl(var(--chart-1))',
   'hsl(var(--chart-2))',
@@ -64,7 +63,7 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
 
   const allCategories = useMemo(() => {
     const categories = new Set(unifiedExpenses.map(f => f.category));
-    return Array.from(categories);
+    return Array.from(categories).sort();
   }, [unifiedExpenses]);
 
   const maxAmount = useMemo(() => {
@@ -77,18 +76,18 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
   const [timelinePeriod, setTimelinePeriod] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
 
 
-  useMemo(() => {
+  useEffect(() => {
     setSelectedCategories(allCategories);
   }, [allCategories]);
 
-  useMemo(() => {
+  useEffect(() => {
     setAmountRange([0, maxAmount]);
   }, [maxAmount]);
   
   const filteredExpenses = useMemo(() => {
     return unifiedExpenses.filter(f => {
       const expenseDate = new Date(f.date);
-      if (isNaN(expenseDate.getTime())) { // Check for invalid date
+      if (!isValid(expenseDate)) {
         return false;
       }
       const inCategory = selectedCategories.length === 0 || selectedCategories.length === allCategories.length || selectedCategories.includes(f.category);
@@ -99,27 +98,13 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
   }, [unifiedExpenses, selectedCategories, allCategories, amountRange, dateRange]);
 
   const filteredReceipts = useMemo(() => {
-    return acceptedFiles.filter(f => {
-      const data = f.extractedData!;
-      const receiptDate = new Date(data.date);
-      if (isNaN(receiptDate.getTime())) { // Check for invalid date
-        return false;
-      }
-      const inCategory = selectedCategories.length === 0 || selectedCategories.length === allCategories.length || selectedCategories.includes(data.category);
-      const inAmountRange = data.amount >= amountRange[0] && data.amount <= amountRange[1];
-      const inDateRange = !dateRange || ((!dateRange.from || receiptDate >= dateRange.from) && (!dateRange.to || receiptDate <= dateRange.to));
-      return inCategory && inAmountRange && inDateRange;
-    });
-  }, [acceptedFiles, selectedCategories, allCategories, amountRange, dateRange]);
+    const filteredIds = new Set(filteredExpenses.map(e => e.id));
+    return acceptedFiles.filter(f => filteredIds.has(f.id));
+  }, [acceptedFiles, filteredExpenses]);
+
 
   const summary = useMemo(() => {
     const totalExpenses = filteredExpenses.reduce((sum, f) => sum + f.amount, 0);
-    const totalDeductible = filteredExpenses.reduce((sum, f) => {
-      if (FBR_DEDUCTIBLE_CATEGORIES.includes(f.category)) {
-        return sum + f.amount;
-      }
-      return sum;
-    }, 0);
     
     const categorySummary = filteredExpenses.reduce((acc, f) => {
         const category = f.category;
@@ -142,17 +127,17 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
     
     const totalIncome = transactions
         .filter(tx => {
-            if (!dateRange) return true;
             const txDate = new Date(tx.date);
+            if (!isValid(txDate) || !tx.credit) return false;
+
+            if (!dateRange) return true;
             return (!dateRange.from || txDate >= dateRange.from) && (!dateRange.to || txDate <= dateRange.to);
         })
         .reduce((sum, tx) => sum + (tx.credit || 0), 0);
 
     return {
       totalExpenses,
-      totalDeductible,
       categorySummary,
-      processedCount: filteredExpenses.length,
       businessExpenses,
       personalExpenses,
       totalIncome,
@@ -171,32 +156,33 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
 
   const timelineData = useMemo(() => {
     let groupedData: { [key: string]: number } = {};
+    
+    const validFilteredExpenses = filteredExpenses.filter(f => isValid(parseISO(f.date)));
 
     if (timelinePeriod === 'daily') {
-        filteredExpenses.forEach(f => {
+        validFilteredExpenses.forEach(f => {
             const day = format(parseISO(f.date), 'yyyy-MM-dd');
             groupedData[day] = (groupedData[day] || 0) + f.amount;
         });
     } else if (timelinePeriod === 'weekly') {
-        filteredExpenses.forEach(f => {
+        validFilteredExpenses.forEach(f => {
             const weekStart = format(startOfWeek(parseISO(f.date)), 'yyyy-MM-dd');
             groupedData[weekStart] = (groupedData[weekStart] || 0) + f.amount;
         });
     } else { // monthly
-        filteredExpenses.forEach(f => {
-            const monthStart = format(startOfMonth(parseISO(f.date)), 'yyyy-MM');
+        validFilteredExpenses.forEach(f => {
+            const monthStart = format(startOfMonth(parseISO(f.date)), 'yyyy-MM-dd');
             groupedData[monthStart] = (groupedData[monthStart] || 0) + f.amount;
         });
     }
 
     return Object.entries(groupedData)
         .map(([date, total]) => ({ date, total }))
-        .sort((a, b) => {
-            const dateA = new Date(a.date.length === 7 ? `${a.date}-01` : a.date);
-            const dateB = new Date(b.date.length === 7 ? `${b.date}-01` : b.date);
-            return dateA.getTime() - dateB.getTime();
-        })
-        .map(item => ({...item, date: format(new Date(item.date.length === 7 ? `${item.date}-01` : item.date), timelinePeriod === 'daily' ? 'MMM d' : (timelinePeriod === 'weekly' ? 'MMM d' : 'MMM yyyy'))}));
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .map(item => ({
+            ...item, 
+            date: format(new Date(item.date), timelinePeriod === 'daily' ? 'MMM d' : (timelinePeriod === 'weekly' ? 'MMM d' : 'MMM yyyy'))
+        }));
 
   }, [filteredExpenses, timelinePeriod]);
 
@@ -228,14 +214,16 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
                         <DropdownMenuTrigger asChild>
                             <Button variant="outline" className="w-full justify-between">
                             <span>
-                                {selectedCategories.length === 0 || selectedCategories.length === allCategories.length
+                                {selectedCategories.length === 0
+                                ? "No categories selected"
+                                : selectedCategories.length === allCategories.length
                                 ? "All categories"
                                 : `${selectedCategories.length} selected`}
                             </span>
                             <ChevronDown className="h-4 w-4 opacity-50" />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent className="w-56">
+                        <DropdownMenuContent className="w-56 max-h-96 overflow-y-auto">
                             <DropdownMenuLabel>Filter by Category</DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             <DropdownMenuCheckboxItem
@@ -325,15 +313,16 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
         <Card>
           <CardHeader>
             <CardTitle>Total Income</CardTitle>
+             <CardDescription>from filtered credits</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">{summary.totalIncome.toLocaleString()} <span className="text-lg font-normal text-muted-foreground">PKR</span></p>
-             <p className="text-xs text-muted-foreground mt-1">from statement credits</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
             <CardTitle>Total Expenses</CardTitle>
+            <CardDescription>from filtered debits</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">{summary.totalExpenses.toLocaleString()} <span className="text-lg font-normal text-muted-foreground">PKR</span></p>
@@ -342,6 +331,7 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
         <Card>
           <CardHeader>
             <CardTitle>Personal Expenses</CardTitle>
+            <CardDescription>non-business spending</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">{summary.personalExpenses.toLocaleString()} <span className="text-lg font-normal text-muted-foreground">PKR</span></p>
@@ -350,6 +340,7 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
          <Card>
           <CardHeader>
             <CardTitle>Business Expenses</CardTitle>
+             <CardDescription>for business use</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">{summary.businessExpenses.toLocaleString()} <span className="text-lg font-normal text-muted-foreground">PKR</span></p>
@@ -384,7 +375,9 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
         </div>
 
         {/* FBR Report Generator */}
-        <FbrReportGenerator expenses={unifiedExpenses} />
+        <div className="md:col-span-4">
+            <FbrReportGenerator expenses={unifiedExpenses} />
+        </div>
 
       </div>
     </section>
