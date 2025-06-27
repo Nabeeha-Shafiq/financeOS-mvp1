@@ -334,7 +334,7 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
         
         {/* Expense List View */}
         <div className="md:col-span-4">
-            <ExpenseListView expenses={filteredReceipts} />
+            <ExpenseListView expenses={filteredReceipts} transactions={transactions} />
         </div>
 
         {/* FBR Report Generator */}

@@ -47,7 +47,7 @@ export function FbrReportGenerator({ acceptedFiles }: FbrReportGeneratorProps) {
   const handleExportCSV = () => {
     if (typeof annualIncome !== 'number' || annualIncome <= 0) return;
 
-    const headers = ['Date', 'Description', 'Category', 'Amount', 'Deductible', 'Receipt Available'];
+    const headers = ['Date', 'Description', 'Category', 'Amount', 'Deductible', 'Source', 'Confidence Score', 'Receipt Available'];
     
     const rows = acceptedFiles.map(f => {
         const data = f.extractedData!;
@@ -57,11 +57,13 @@ export function FbrReportGenerator({ acceptedFiles }: FbrReportGeneratorProps) {
 
         return [
             data.date,
-            `"${data.items.join(', ')}"`,
+            `"${data.merchant_name}"`,
             data.category,
             data.amount,
             isDeductible ? 'Yes' : 'No',
-            'Yes'
+            data.isManual ? 'Manual Entry' : 'Receipt Scan',
+            data.isManual ? '100%' : `${(data.confidence_score * 100).toFixed(0)}%`,
+            data.isManual ? 'No' : 'Yes',
         ].join(',');
     });
 
@@ -101,7 +103,7 @@ export function FbrReportGenerator({ acceptedFiles }: FbrReportGeneratorProps) {
     `;
     doc.text(summaryText, 14, 40);
 
-    const tableColumn = ['Date', 'Description', 'Category', 'Amount (PKR)', 'Deductible'];
+    const tableColumn = ['Date', 'Description', 'Category', 'Amount (PKR)', 'Deductible', 'Source'];
     const tableRows: (string|number)[][] = [];
 
     acceptedFiles.forEach(f => {
@@ -112,10 +114,11 @@ export function FbrReportGenerator({ acceptedFiles }: FbrReportGeneratorProps) {
             
         const row = [
             data.date,
-            data.items.join(', '),
+            data.merchant_name,
             data.category,
             data.amount.toLocaleString(),
             isDeductible ? 'Yes' : 'No',
+            data.isManual ? 'Manual' : 'Receipt'
         ];
         tableRows.push(row);
     });
