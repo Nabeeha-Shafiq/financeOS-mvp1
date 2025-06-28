@@ -295,7 +295,7 @@ export default function DataEntryPage() {
             <Card>
                 <CardHeader>
                     <CardTitle>Receipt Scanner & Bulk Upload</CardTitle>
-                    <CardDescription>Drag and drop receipts (JPG, PNG, PDF) or a ZIP file. The AI will process them for you.</CardDescription>
+                    <CardDescription>Drag and drop multiple receipts (JPG, PNG, PDF), or a ZIP file for bulk processing. The AI will scan and extract the data automatically.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                     <ReceiptDropzone onFilesAdded={handleFilesAdded} disabled={isProcessing} />
@@ -336,7 +336,7 @@ export default function DataEntryPage() {
              <Card>
                 <CardHeader>
                     <CardTitle>Manual Expense Entry</CardTitle>
-                    <CardDescription>Use this form to log expenses that you don't have a digital receipt for. Recent entries are shown on the right.</CardDescription>
+                    <CardDescription>Quickly log expenses when you don't have a digital receipt. Use this form for cash payments, reimbursements, or other untracked spending.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <ManualEntryTab />
@@ -348,7 +348,7 @@ export default function DataEntryPage() {
             <Card>
                 <CardHeader>
                     <CardTitle>Bank Statement Import</CardTitle>
-                    <CardDescription>Upload a statement (PDF, CSV, XLS) to extract transactions. The system will try to match them to your receipts.</CardDescription>
+                    <CardDescription>Import a bank statement (PDF, CSV, XLS, HTML) to extract transactions. The system intelligently handles various formats from major Pakistani banks and attempts to auto-match transactions to your receipts.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <StatementProcessor 

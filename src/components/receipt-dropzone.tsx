@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, type DragEvent } from 'react';
@@ -72,10 +73,10 @@ export function ReceiptDropzone({ onFilesAdded, disabled }: ReceiptDropzoneProps
       <div className="flex flex-col items-center justify-center text-center">
         <UploadCloud className="w-12 h-12 text-muted-foreground" />
         <p className="mt-4 text-lg font-medium text-foreground">
-          Drag & drop receipts here, or upload a ZIP file
+          Drag & Drop Files or a ZIP Archive Here
         </p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Supports JPG, PNG, PDF, HEIC. Max 5MB per file, 100 files per session.
+          Supports bulk uploads of JPG, PNG, PDF, and HEIC files. Max 5MB per file, 100 files per session.
         </p>
       </div>
       <div className="flex flex-col sm:flex-row gap-4 pt-4">
