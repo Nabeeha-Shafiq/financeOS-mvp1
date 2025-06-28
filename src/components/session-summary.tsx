@@ -141,7 +141,9 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
     const totalIncome = transactions
         .filter(tx => {
             if (!tx.credit) return false;
-            const txDate = parseISO(tx.date);
+            const txDateStr = tx.date;
+            if (!txDateStr) return false;
+            const txDate = parseISO(txDateStr);
             if (!isValid(txDate)) return false;
 
             if (!dateRange || !dateRange.from) return true;
@@ -192,7 +194,7 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
     
     const validFilteredExpenses = filteredExpenses.filter(f => {
         try {
-            return isValid(parseISO(f.date));
+            return f.date && isValid(parseISO(f.date));
         } catch {
             return false;
         }
@@ -214,13 +216,15 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
             groupedData[monthStart] = (groupedData[monthStart] || 0) + f.amount;
         });
     }
+    
+    if (Object.keys(groupedData).length === 0) return [];
 
     return Object.entries(groupedData)
         .map(([date, total]) => ({ date: parseISO(date), total }))
         .sort((a, b) => a.date.getTime() - b.date.getTime())
         .map(item => ({
             total: item.total,
-            date: format(item.date, timelinePeriod === 'daily' ? 'MMM d' : (timelinePeriod === 'weekly' ? 'MMM d' : 'MMM yyyy'))
+            date: format(item.date, timelinePeriod === 'daily' ? 'MMM d' : (timelinePeriod === 'weekly' ? 'MMM d' : 'MMM yy'))
         }));
 
   }, [filteredExpenses, timelinePeriod]);
