@@ -2,7 +2,6 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { FinancialDataProvider } from '@/context/financial-data-context';
-import { SidebarProvider } from '@/components/ui/sidebar';
 
 export const metadata: Metadata = {
   title: 'FinanceOS Lite',
@@ -23,9 +22,7 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <FinancialDataProvider>
-            <SidebarProvider>
-                {children}
-            </SidebarProvider>
+            {children}
         </FinancialDataProvider>
         <Toaster />
       </body>
