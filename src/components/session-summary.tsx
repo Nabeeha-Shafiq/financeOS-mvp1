@@ -85,6 +85,7 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
   
   const filteredExpenses = useMemo(() => {
     return unifiedExpenses.filter(f => {
+      if (!f.date) return false;
       const expenseDate = parseISO(f.date);
       if (!isValid(expenseDate)) {
         return false;
@@ -193,29 +194,23 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
     let groupedData: { [key: string]: number } = {};
     
     const validFilteredExpenses = filteredExpenses.filter(f => {
-        try {
-            return f.date && isValid(parseISO(f.date));
-        } catch {
-            return false;
-        }
+        return f.date && isValid(parseISO(f.date));
     });
 
-    if (timelinePeriod === 'daily') {
-        validFilteredExpenses.forEach(f => {
-            const day = format(parseISO(f.date), 'yyyy-MM-dd');
-            groupedData[day] = (groupedData[day] || 0) + f.amount;
-        });
-    } else if (timelinePeriod === 'weekly') {
-        validFilteredExpenses.forEach(f => {
-            const weekStart = format(startOfWeek(parseISO(f.date)), 'yyyy-MM-dd');
-            groupedData[weekStart] = (groupedData[weekStart] || 0) + f.amount;
-        });
-    } else { // monthly
-        validFilteredExpenses.forEach(f => {
-            const monthStart = format(startOfMonth(parseISO(f.date)), 'yyyy-MM-dd');
-            groupedData[monthStart] = (groupedData[monthStart] || 0) + f.amount;
-        });
-    }
+    if (validFilteredExpenses.length === 0) return [];
+    
+    const getGroupKey = (date: Date) => {
+      if (timelinePeriod === 'daily') return format(date, 'yyyy-MM-dd');
+      if (timelinePeriod === 'weekly') return format(startOfWeek(date), 'yyyy-MM-dd');
+      // monthly
+      return format(startOfMonth(date), 'yyyy-MM-dd');
+    };
+
+    validFilteredExpenses.forEach(f => {
+        const date = parseISO(f.date);
+        const key = getGroupKey(date);
+        groupedData[key] = (groupedData[key] || 0) + f.amount;
+    });
     
     if (Object.keys(groupedData).length === 0) return [];
 
@@ -238,8 +233,8 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
   };
   
   return (
-    <section className="mt-12" aria-labelledby="summary-heading">
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
         <h2 id="summary-heading" className="text-2xl font-bold">Dashboard</h2>
       </div>
 
@@ -451,10 +446,10 @@ export function SessionSummary({ acceptedFiles, transactions }: SessionSummaryPr
         </div>
         
         <div className="md:col-span-4">
-            <ExpenseListView expenses={filteredReceipts} transactions={transactions} />
+            <ExpenseListView expenses={filteredExpenses} transactions={transactions} />
         </div>
 
       </div>
-    </section>
+    </div>
   );
 }
